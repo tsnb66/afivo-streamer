@@ -10,9 +10,6 @@ module m_transport_data
    ! The maximum number of rows per entry
    integer, parameter :: max_num_rows   = 500
 
-   ! The maximum number columns in a 2D transport data table
-   integer, parameter :: max_num_cols   = 50
-
    integer, parameter :: lineLen        = 200
 
    public :: TD_get_from_file
@@ -150,7 +147,7 @@ contains
       integer, parameter     :: my_unit = 333
       character(LEN=40)      :: line_fmt
       character(LEN=lineLen) :: line, prev_line
-      real(dp)               :: temp_table(max_num_cols, max_num_rows)
+      real(dp), allocatable  :: temp_table(:, :)
 
       nL           = 0 ! Set the number of lines to 0
       gas_name_len = len_trim(gas_name)
@@ -190,6 +187,7 @@ contains
          ! prev_line holds the type of transport data, see the formatting above
          ! cycle if this is not the right entry
          if (trim(data_name) /= trim(prev_line)) cycle
+         n_cols = 0
 
          ! Now we can check whether there is a comment, while scanning lines
          ! until dashes are found, which indicate the start of the transport
@@ -201,14 +199,23 @@ contains
                cycle ! Do nothing for now
             else if ( line(1:12) == "NUM_COLUMNS:" ) then
                read(line(13:), *) n_cols
-               if (allocated(x2_data)) deallocate(x2_data)
-               allocate(x2_data(n_cols))
+               if (allocated(x1_data)) deallocate(x1_data)
+               allocate(x1_data(n_cols))
+               x1_data = -huge(1.0_dp)
             else if ( line(1:11) == "COL_VALUES:" ) then
-               read(line(12:), *) x2_data
+               read(line(12:), *) x1_data
             else if ( line(1:5) == "-----" ) then
                exit
             end if
          end do
+
+         if (n_cols > 0) then
+            allocate(temp_table(n_cols+1, max_num_rows))
+         else
+            print *, "TD_get_td_from_file error at line", nL
+            print *, "Missing NUM_COLUMNS: statement"
+            stop
+         end if
 
          ! Read the transport data into a temporary array
          n_rows = 0
@@ -222,7 +229,7 @@ contains
             else if (n_rows < max_num_rows) then
                n_rows = n_rows + 1
                read(line, *, ERR = 999, end = 777) &
-                    temp_table(1:n_cols+1, n_rows)
+                    temp_table(:, n_rows)
             else
                print *, "CS_read_file error: too many rows in ", &
                     file_name, " at line ", nL
@@ -230,14 +237,14 @@ contains
          end do
 
          ! Store the data in the actual table
-         if (allocated(x1_data)) deallocate(x1_data)
-         allocate(x1_data(n_rows))
+         if (allocated(x2_data)) deallocate(x2_data)
+         allocate(x2_data(n_rows))
 
          if (allocated(y_data)) deallocate(y_data)
          allocate(y_data(n_cols, n_rows))
 
-         x1_data = temp_table(1, 1:n_rows)
-         y_data = temp_table(2:n_cols+1, 1:n_rows)
+         x2_data = temp_table(1, 1:n_rows)
+         y_data = temp_table(2:, 1:n_rows)
 
          exit                   ! Done
       end do

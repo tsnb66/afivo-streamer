@@ -7,8 +7,7 @@ module m_streamer
 
   use m_config
   use m_random
-  use m_photons
-  use m_lookup_table
+  use m_lookup_table_2d
 
   implicit none
   public
@@ -19,7 +18,8 @@ module m_streamer
   integer, parameter :: ST_slen = 200
 
   ! ** Indices of cell-centered variables **
-  integer, parameter :: n_var_cell     = 8 ! Number of variables
+  integer, parameter :: n_var_cell_2d     = 9 ! Number of variables
+  integer, parameter :: n_var_cell_3d     = 10 ! Number of variables
   integer, parameter :: i_electron     = 1 ! Electron density
   integer, parameter :: i_pos_ion      = 2 ! Positive ion density
   integer, parameter :: i_electron_old = 3 ! For time-stepping scheme
@@ -27,48 +27,37 @@ module m_streamer
   integer, parameter :: i_phi          = 5 ! Electrical potential
   integer, parameter :: i_electric_fld = 6 ! Electric field norm
   integer, parameter :: i_rhs          = 7 ! Source term Poisson
-  integer, parameter :: i_photo        = 8 ! Phototionization rate
+  integer, parameter :: i_Ex = 8
+  integer, parameter :: i_Ey = 9
+  integer, parameter :: i_Ez = 10
+
 
   ! Names of the cell-centered variables
-  character(len=12) :: ST_cc_names(n_var_cell) = &
+  character(len=12) :: ST_cc_names(n_var_cell_3d) = &
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "pho"]
+       "pos_ion_old", "phi", "electric_fld", "rhs", "Ex", "Ey", "Ez"]
 
   ! ** Indices of face-centered variables **
-  integer, parameter :: n_var_face   = 2 ! Number of variables
+  integer, parameter :: n_var_face   = 1 ! Number of variables
   integer, parameter :: flux_elec    = 1 ! Electron flux
-  integer, parameter :: electric_fld = 2 ! Electric field vector
 
   ! ** Indices of transport data **
-  integer, parameter :: n_var_td    = 4 ! Number of transport coefficients
-  integer, parameter :: i_mobility  = 1 ! Electron mobility
-  integer, parameter :: i_diffusion = 2 ! Electron diffusion constant
-  integer, parameter :: i_alpha     = 3 ! Ionization coeff (1/m)
-  integer, parameter :: i_eta       = 4 ! Attachment coeff (1/m)
+  integer, parameter :: n_var_td    = 6 ! Number of transport coefficients
+  integer, parameter :: i_mobility_B  = 1 ! Electron mobility parallel to B
+  integer, parameter :: i_mobility_xB  = 2 ! Electron mobility perpendicular to B
+  integer, parameter :: i_mobility_ExB  = 3 ! ExB electron mobility
+  integer, parameter :: i_diffusion = 4 ! Electron diffusion constant
+  integer, parameter :: i_alpha     = 5 ! Ionization coeff (1/m)
+  integer, parameter :: i_eta       = 6 ! Attachment coeff (1/m)
 
   ! Whether cylindrical coordinates are used
   logical :: ST_cylindrical = .false.
 
-  ! Table with transport data vs electric field
-  type(lookup_table_t), protected :: ST_td_tbl
+  ! Table with transport data vs E,B angle and electric field
+  type(LT2_t), protected :: ST_td_tbl
 
   ! Random number generator
   type(RNG_t) :: ST_rng
-
-  ! Whether we use phototionization
-  logical, protected :: ST_photoi_enabled = .false.
-
-  ! Oxygen fraction
-  real(dp), protected :: ST_photoi_frac_O2 = 0.2_dp
-
-  ! Photoionization efficiency
-  real(dp), protected :: ST_photoi_eta = 0.05_dp
-
-  ! Number of photons to use
-  integer, protected :: ST_photoi_num_photons = 100*1000
-
-  ! Table for photoionization
-  type(photoi_tbl_t), protected :: ST_photoi_tbl
 
   ! Name of the simulations
   character(len=ST_slen), protected :: ST_simulation_name = "sim"
@@ -171,8 +160,6 @@ contains
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &
          "The length of the domain (m)")
-    call CFG_add_get(cfg, "gas_pressure", ST_gas_pressure, &
-         "The gas pressure (bar), used for photoionization")
 
     call CFG_add_get(cfg, "dt_output", ST_dt_output, &
          "The timestep for writing output (s)")
@@ -206,15 +193,6 @@ contains
     call CFG_add_get(cfg, "refine_init_fac", ST_refine_init_fac, &
          "Refine until dx is smaller than this factor times the seed width")
 
-    call CFG_add_get(cfg, "photoi_enabled", ST_photoi_enabled, &
-         "Whether photoionization is enabled")
-    call CFG_add_get(cfg, "photoi_frac_O2", ST_photoi_frac_O2, &
-         "Fraction of oxygen (0-1)")
-    call CFG_add_get(cfg, "photoi_eta", ST_photoi_eta, &
-         "Photoionization efficiency factor, typically around 0.05")
-    call CFG_add_get(cfg, "photoi_num_photons", ST_photoi_num_photons, &
-         "Number of discrete photons to use for photoionization")
-
   end subroutine ST_initialize
 
   !> Initialize the transport coefficients
@@ -228,15 +206,13 @@ contains
     character(len=ST_slen)     :: td_file = "td_input_file.txt"
     character(len=ST_slen)     :: gas_name         = "AIR"
     integer                    :: table_size       = 1000
-    integer                    :: rng_int4_seed(4) = &
-         [8123, 91234, 12399, 293434]
-    integer(int64)             :: rng_int8_seed(2)
     real(dp)                   :: max_electric_fld = 3e7_dp
     real(dp)                   :: alpha_fac        = 1.0_dp
     real(dp)                   :: eta_fac          = 1.0_dp
     real(dp)                   :: mobility_fac     = 1.0_dp
     real(dp)                   :: diffusion_fac    = 1.0_dp
-    real(dp), allocatable      :: x_data(:), y_data(:)
+    real(dp), allocatable      :: x1(:), x2(:)
+    real(dp), allocatable      :: y_2d(:,:)
     character(len=ST_slen)     :: data_name
 
     call CFG_add_get(cfg, "transport_data_file", td_file, &
@@ -259,51 +235,57 @@ contains
          "Modify diffusion by this factor")
 
     ! Create a lookup table for the model coefficients
-    ST_td_tbl = LT_create(0.0_dp, max_electric_fld, table_size, n_var_td)
+    ST_td_tbl = LT2_create([0.0_dp, 0.0_dp], &
+         [90.0_dp, max_electric_fld], [20, table_size], n_var_td)
 
     ! Fill table with data
-    data_name = "efield[V/m]_vs_mu[m2/Vs]"
-    call CFG_add_get(cfg, "td_mobility_name", data_name, &
+    data_name = "efield[V/m]_vs_muB[m2/Vs]"
+    call CFG_add_get(cfg, "td_mobility_par_name", data_name, &
          "The name of the mobility coefficient")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * mobility_fac
-    call LT_set_col(ST_td_tbl, i_mobility, x_data, y_data)
+    call TD_get_from_file_2D(td_file, gas_name, &
+         trim(data_name), x1, x2, y_2d)
+    y_2d = y_2d * mobility_fac
+    call LT2_set_col(ST_td_tbl, i_mobility_B, x1, x2, y_2d)
+
+    data_name = "efield[V/m]_vs_muxB[m2/Vs]"
+    call CFG_add_get(cfg, "td_mobility_perp_name", data_name, &
+         "The name of the mobility coefficient")
+    call TD_get_from_file_2D(td_file, gas_name, &
+         trim(data_name), x1, x2, y_2d)
+    y_2d = y_2d * mobility_fac
+    call LT2_set_col(ST_td_tbl, i_mobility_xB, x1, x2, y_2d)
+
+    data_name = "efield[V/m]_vs_muExB[m2/Vs]"
+    call CFG_add_get(cfg, "td_mobility_cross_name", data_name, &
+         "The name of the mobility coefficient")
+    call TD_get_from_file_2D(td_file, gas_name, &
+         trim(data_name), x1, x2, y_2d)
+    y_2d = y_2d * mobility_fac
+    call LT2_set_col(ST_td_tbl, i_mobility_ExB, x1, x2, y_2d)
 
     data_name = "efield[V/m]_vs_dif[m2/s]"
     call CFG_add_get(cfg, "td_diffusion_name", data_name, &
          "The name of the diffusion coefficient")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * diffusion_fac
-    call LT_set_col(ST_td_tbl, i_diffusion, x_data, y_data)
+    call TD_get_from_file_2D(td_file, gas_name, &
+         trim(data_name), x1, x2, y_2d)
+    y_2d = y_2d * diffusion_fac
+    call LT2_set_col(ST_td_tbl, i_diffusion, x1, x2, y_2d)
 
     data_name = "efield[V/m]_vs_alpha[1/m]"
     call CFG_add_get(cfg, "td_alpha_name", data_name, &
          "The name of the eff. ionization coeff.")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * alpha_fac
-    call LT_set_col(ST_td_tbl, i_alpha, x_data, y_data)
+    call TD_get_from_file_2D(td_file, gas_name, &
+         trim(data_name), x1, x2, y_2d)
+    y_2d = y_2d * alpha_fac
+    call LT2_set_col(ST_td_tbl, i_alpha, x1, x2, y_2d)
 
     data_name = "efield[V/m]_vs_eta[1/m]"
     call CFG_add_get(cfg, "td_eta_name", data_name, &
          "The name of the eff. attachment coeff.")
-    call TD_get_from_file(td_file, gas_name, &
-         trim(data_name), x_data, y_data)
-    y_data = y_data * eta_fac
-    call LT_set_col(ST_td_tbl, i_eta, x_data, y_data)
-
-    ! Create table for photoionization
-    if (ST_photoi_enabled) then
-       call CFG_add_get(cfg, "photoi_rng_seed", rng_int4_seed, &
-            "Seed for the photoionization random number generator")
-       rng_int8_seed = transfer(rng_int4_seed, rng_int8_seed)
-       call ST_rng%set_seed(rng_int8_seed)
-
-       call photoi_get_table_air(ST_photoi_tbl, ST_photoi_frac_O2 * &
-            ST_gas_pressure, 2 * ST_domain_len)
-    end if
+    call TD_get_from_file_2D(td_file, gas_name, &
+         trim(data_name), x1, x2, y_2d)
+    y_2d = y_2d * eta_fac
+    call LT2_set_col(ST_td_tbl, i_eta, x1, x2, y_2d)
 
   end subroutine ST_load_transport_data
 

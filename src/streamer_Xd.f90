@@ -18,9 +18,16 @@ program streamer_$Dd
   type(mg$D_t)           :: mg        ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
+  real(dp) :: B0_hat(3)
+
   integer :: output_cnt = 0 ! Number of output files written
 
   call CFG_update_from_arguments(cfg)
+
+  B0_hat = [1.0_dp, 0.0_dp, 0.0_dp]
+  call CFG_add_get(cfg, "magnetic_field_unitvec", B0_hat, &
+       "Unitvector of magnetic field")
+
   call ST_initialize(cfg, $D)
   call ST_load_transport_data(cfg)
   call field_initialize(cfg, mg)
@@ -58,9 +65,6 @@ program streamer_$Dd
 
   call a$D_print_info(tree)
 
-  if (ST_photoi_enabled) &
-       call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons)
-
   do it = 1, huge(1)
      ! Get a new time step, which is at most dt_amr
      call a$D_reduction_vec(tree, get_max_dt, get_min, &
@@ -69,6 +73,7 @@ program streamer_$Dd
 
      if (ST_dt < 1e-14) then
         print *, "ST_dt getting too small, instability?"
+        print *, ST_dt_vec
         exit
      end if
 
@@ -82,9 +87,6 @@ program streamer_$Dd
      else
         write_out = .false.
      end if
-
-     if (ST_photoi_enabled) &
-          call set_photoionization(tree, ST_photoi_eta, ST_photoi_num_photons, ST_dt)
 
      ! Copy previous solution
      call a$D_tree_copy_cc(tree, i_electron, i_electron_old)
@@ -134,6 +136,14 @@ program streamer_$Dd
                 r_max = ST_lineout_rmax(1:$D) * ST_domain_len, &
                 n_points=ST_lineout_npoints, dir=ST_output_dir)
         end if
+
+! #if $D == 2
+!         write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
+!                 "_plane_", output_cnt
+!         call a2_write_plane(tree, trim(fname), &
+!              [i_phi], &
+!              [0.0_dp, 80e-3_dp], [5.0e-3_dp, 85e-3_dp], [512, 512], 'output')
+! #endif
      end if
 
      if (mod(it, ST_refine_per_steps) == 1) then
@@ -176,12 +186,13 @@ contains
 
     ! Initialize tree
     if (ST_cylindrical) then
-       call a$D_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
+       call a$D_init(tree, ST_box_size, n_var_cell_$Dd, n_var_face, dr, &
             coarsen_to=2, n_boxes=n_boxes_init, coord=af_cyl, &
-            cc_names=ST_cc_names)
+            cc_names=ST_cc_names(1:n_var_cell_$Dd))
     else
-       call a$D_init(tree, ST_box_size, n_var_cell, n_var_face, dr, &
-            coarsen_to=2, n_boxes=n_boxes_init, cc_names=ST_cc_names)
+       call a$D_init(tree, ST_box_size, n_var_cell_$Dd, n_var_face, dr, &
+            coarsen_to=2, n_boxes=n_boxes_init, &
+            cc_names=ST_cc_names(1:n_var_cell_$Dd))
     end if
 
     ! Set up geometry
@@ -203,16 +214,19 @@ contains
          cell_flags(DTIMES(box%n_cell))
     integer                  :: IJK, n, nc
     real(dp)                 :: cphi, dx, dx2
-    real(dp)                 :: alpha, adx, fld
+    real(dp)                 :: alpha, adx, fld($D), vel($D)
     real(dp)                 :: dist
+    type(LT2_loc_t) :: loc
 
     nc      = box%n_cell
     dx      = box%dr
     dx2     = box%dr**2
 
     do KJI_DO(1,nc)
-       fld   = box%cc(IJK, i_electric_fld)
-       alpha = LT_get_col(ST_td_tbl, i_alpha, fld)
+       fld   = box%cc(IJK, i_Ex:i_Ex+$D-1)
+
+       call get_velocity(fld, vel, loc)
+       alpha = LT2_get_col_at_loc(ST_td_tbl, i_alpha, loc)
        ! The refinement is based on the ionization length
        adx   = box%dr * alpha
 
@@ -262,47 +276,85 @@ contains
     type(box$D_t), intent(in) :: box
     integer, intent(in)      :: n_cond
     integer                  :: IJK, nc
-    real(dp)                 :: fld($D), fld_norm, mobility, diffusion_c
+    real(dp)                 :: fld($D), vel($D), diffc, mu_par, tmp
     real(dp)                 :: dt_vec(n_cond)
+    type(LT2_loc_t) :: loc
 
     nc = box%n_cell
     dt_vec = ST_dt_max
 
     do KJI_DO(1,nc)
-#if $D == 2
-       fld(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
-            box%fc(i+1, j, 1, electric_fld))
-       fld(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
-            box%fc(i, j+1, 2, electric_fld))
-#elif $D == 3
-       fld(1) = 0.5_dp * (box%fc(IJK, 1, electric_fld) + &
-            box%fc(i+1, j, k, 1, electric_fld))
-       fld(2) = 0.5_dp * (box%fc(IJK, 2, electric_fld) + &
-            box%fc(i, j+1, k, 2, electric_fld))
-       fld(3) = 0.5_dp * (box%fc(IJK, 3, electric_fld) + &
-            box%fc(i, j, k+1, 3, electric_fld))
-#endif
+       fld = box%cc(IJK, i_Ex:i_Ex+$D-1)
 
-
-       fld_norm = box%cc(IJK, i_electric_fld)
-       mobility = LT_get_col(ST_td_tbl, i_mobility, fld_norm)
-       diffusion_c = LT_get_col(ST_td_tbl, i_diffusion, fld_norm)
+       call get_velocity(fld, vel, loc)
+       diffc = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
+       mu_par = LT2_get_col_at_loc(ST_td_tbl, i_mobility_B, loc)
 
        ! The 0.5 is here because of the explicit trapezoidal rule
-       dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), &
-            0.5_dp/sum(abs(fld * mobility) / box%dr))
+       tmp = 0.5_dp / max(sum(abs(vel) / box%dr), epsilon(1.0_dp))
+       dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), tmp)
 
-       ! Dielectric relaxation time
+       ! Dielectric relaxation time (using mu_par, which is the highest)
        dt_vec(ST_ix_drt) = min(dt_vec(ST_ix_drt), &
-            UC_eps0 / (UC_elem_charge * mobility * &
+            UC_eps0 / (UC_elem_charge * mu_par * &
             max(box%cc(IJK, i_electron), epsilon(1.0_dp))))
 
        ! Diffusion condition
        dt_vec(ST_ix_diff) = min(dt_vec(ST_ix_diff), &
-            0.25_dp * box%dr**2 / max(diffusion_c, epsilon(1.0_dp)))
+            0.25_dp * box%dr**2 / max(diffc, epsilon(1.0_dp)))
     end do; CLOSE_DO
 
   end function get_max_dt
+
+  real(dp) function angle_degrees(vec_par, vec_norm)
+    real(dp), intent(in) :: vec_par($D), vec_norm
+    real(dp), parameter :: fac = 180 / acos(-1.0_dp)
+
+    angle_degrees = acos(norm2(vec_par)/vec_norm)
+    angle_degrees = angle_degrees * fac
+
+    ! Lies between 0-180 now, convert to 0-90
+    if (angle_degrees > 90) then
+       angle_degrees = 180 - angle_degrees
+    end if
+  end function angle_degrees
+
+  subroutine split_field(E, E_par, E_perp, E_cross, E_norm)
+    real(dp), intent(in) :: E($D)
+    real(dp), intent(out) :: E_par($D), E_perp($D)
+    real(dp), intent(out) :: E_cross($D), E_norm
+    real(dp) :: E_hat($D)
+#if $D == 2
+    real(dp) :: tmp(3)
+#endif
+
+    E_norm = norm2(E)
+    E_hat = E / E_norm
+
+    E_perp = E - sum(E_hat * B0_hat(1:$D)) * E
+    E_par = E - E_perp
+
+#if $D == 2
+    tmp(1:2) = E
+    tmp(3) = 0
+    tmp = cross_product(tmp, B0_hat)
+    E_cross = tmp(1:2)
+#elif $D == 3
+    E_cross = cross_product(E, B0_hat)
+#endif
+
+  end subroutine split_field
+
+  !> Return the cross product of vectors a and b
+  pure function cross_product(a, b) result(vec)
+    real(dp), intent(in) :: a(3)
+    real(dp), intent(in) :: b(3)
+    real(dp)             :: vec(3)
+
+    vec(1) = a(2) * b(3) - a(3) * b(2)
+    vec(2) = a(3) * b(1) - a(1) * b(3)
+    vec(3) = a(1) * b(2) - a(2) * b(1)
+  end function cross_product
 
   function get_min(a, b, n) result(min_vec)
     integer, intent(in)  :: n
@@ -317,7 +369,8 @@ contains
     use m_flux_schemes
     type(box$D_t), intent(inout) :: boxes(:)
     integer, intent(in)          :: id
-    real(dp)                     :: inv_dr, fld
+    type(LT2_loc_t) :: loc
+    real(dp)                     :: inv_dr, fld($D), vel($D)
     real(dp), allocatable        :: v(DTIMES(:), :)
     real(dp), allocatable        :: dc(DTIMES(:), :)
     real(dp), allocatable        :: cc(DTIMES(:))
@@ -343,39 +396,39 @@ contains
     do n = 1, nc+1
        do m = 1, nc
 #if $D == 2
-          fld       = 0.5_dp * (boxes(id)%cc(n-1, m, i_electric_fld) + &
-               boxes(id)%cc(n, m, i_electric_fld))
-          v(n, m, 1)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-               boxes(id)%fc(n, m, 1, electric_fld)
-          dc(n, m, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+          fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_Ex:i_Ey) + &
+               boxes(id)%cc(n, m, i_Ex:i_Ey))
+          call get_velocity(fld, vel, loc)
+          v(n, m, 1)  = vel(1)
+          dc(n, m, 1) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
 
-          fld       = 0.5_dp * (boxes(id)%cc(m, n-1, i_electric_fld) + &
-               boxes(id)%cc(m, n, i_electric_fld))
-          v(m, n, 2)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-               boxes(id)%fc(m, n, 2, electric_fld)
-          dc(m, n, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+          fld       = 0.5_dp * (boxes(id)%cc(m, n-1, i_Ex:i_Ey) + &
+               boxes(id)%cc(m, n, i_Ex:i_Ey))
+          call get_velocity(fld, vel, loc)
+          v(m, n, 2)  = vel(2)
+          dc(m, n, 2) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
 #elif $D == 3
           do l = 1, nc
              fld = 0.5_dp * (&
-                  boxes(id)%cc(n-1, m, l, i_electric_fld) + &
-                  boxes(id)%cc(n, m, l, i_electric_fld))
-             v(n, m, l, 1)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-                  boxes(id)%fc(n, m, l, 1, electric_fld)
-             dc(n, m, l, 1) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+                  boxes(id)%cc(n-1, m, l, i_Ex:i_Ez) + &
+                  boxes(id)%cc(n, m, l, i_Ex:i_Ez))
+             call get_velocity(fld, vel, loc)
+             v(n, m, l, 1)  = vel(1)
+             dc(n, m, l, 1) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
 
              fld = 0.5_dp * (&
-                  boxes(id)%cc(m, n-1, l, i_electric_fld) + &
-                  boxes(id)%cc(m, n, l, i_electric_fld))
-             v(m, n, l, 2)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-                  boxes(id)%fc(m, n, l, 2, electric_fld)
-             dc(m, n, l, 2) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+                  boxes(id)%cc(m, n-1, l, i_Ex:i_Ez) + &
+                  boxes(id)%cc(m, n, l, i_Ex:i_Ez))
+             call get_velocity(fld, vel, loc)
+             v(m, n, l, 2)  = vel(2)
+             dc(m, n, l, 2) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
 
              fld = 0.5_dp * (&
-                  boxes(id)%cc(m, l, n-1, i_electric_fld) + &
-                  boxes(id)%cc(m, l, n, i_electric_fld))
-             v(m, l, n, 3)  = -LT_get_col(ST_td_tbl, i_mobility, fld) * &
-                  boxes(id)%fc(m, l, n, 3, electric_fld)
-             dc(m, l, n, 3) = LT_get_col(ST_td_tbl, i_diffusion, fld)
+                  boxes(id)%cc(m, l, n-1, i_Ex:i_Ez) + &
+                  boxes(id)%cc(m, l, n, i_Ex:i_Ez))
+             call get_velocity(fld, vel, loc)
+             v(m, l, n, 3)  = vel(3)
+             dc(m, l, n, 3) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
           end do
 #endif
        end do
@@ -386,6 +439,32 @@ contains
 
     boxes(id)%fc(DTIMES(:), :, flux_elec) = v + dc
   end subroutine fluxes_koren
+
+  subroutine get_velocity(fld, vel, loc)
+    real(dp), intent(in) :: fld($D)
+    real(dp), intent(out) :: vel($D)
+    type(LT2_loc_t), intent(out) :: loc
+
+    real(dp)                 :: angle, E_par($D), E_perp($D), E_cross($D)
+    real(dp)                 :: E_norm, mu_par, mu_perp, mu_cross
+
+    call split_field(fld, E_par, E_perp, E_cross, E_norm)
+    angle = angle_degrees(E_par, E_norm)
+
+    loc = LT2_get_loc(ST_td_tbl, [angle, E_norm])
+    mu_par = LT2_get_col_at_loc(ST_td_tbl, i_mobility_B, loc)
+    mu_perp = LT2_get_col_at_loc(ST_td_tbl, i_mobility_xB, loc)
+    mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
+
+    vel = -mu_par * E_par - mu_perp * E_perp - mu_cross * E_cross ! TODO: check sign
+    ! print *, "get_velocity", fld
+    ! print *, E_norm, angle
+    ! print *, E_par, mu_par
+    ! print *, E_perp, mu_perp
+    ! print *, E_cross, mu_cross
+    ! print *, "-------"
+    ! stop
+  end subroutine get_velocity
 
   !> Take average of new and old electron/ion density for explicit trapezoidal rule
   subroutine average_density(box)
@@ -400,14 +479,14 @@ contains
   subroutine update_solution(box, dt)
     type(box$D_t), intent(inout) :: box
     real(dp), intent(in)         :: dt(:)
-    real(dp)                     :: inv_dr, src, fld
-    real(dp)                     :: alpha, eta, sflux, mu
+    real(dp)                     :: inv_dr, src, fld($D),vel($D)
+    real(dp)                     :: alpha, eta, sflux
 #if $D == 2
     real(dp)                     :: rfac(2)
     integer                      :: ioff
 #endif
     integer                      :: IJK, nc
-    type(LT_loc_t)               :: loc
+    type(LT2_loc_t)               :: loc
 
     nc     = box%n_cell
     inv_dr = 1/box%dr
@@ -416,11 +495,11 @@ contains
 #endif
 
     do KJI_DO(1,nc)
-       fld   = box%cc(IJK, i_electric_fld)
-       loc   = LT_get_loc(ST_td_tbl, fld)
-       alpha = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-       eta   = LT_get_col_at_loc(ST_td_tbl, i_eta, loc)
-       mu    = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
+       fld   = box%cc(IJK, i_Ex:i_Ex+$D-1)
+       call get_velocity(fld, vel, loc)
+
+       alpha = LT2_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+       eta   = LT2_get_col_at_loc(ST_td_tbl, i_eta, loc)
 
        ! Contribution of flux
 #if $D == 2
@@ -442,9 +521,7 @@ contains
 #endif
 
        ! Source term
-       src = fld * mu * box%cc(IJK, i_electron) * (alpha - eta) * dt(1)
-
-       if (ST_photoi_enabled) src = src + box%cc(IJK, i_photo) * dt(1)
+       src = norm2(vel) * box%cc(IJK, i_electron) * (alpha - eta) * dt(1)
 
        ! Add flux and source term
        box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + sflux + src
@@ -454,57 +531,6 @@ contains
 
     end do; CLOSE_DO
   end subroutine update_solution
-
-  !> Sets the photoionization
-  subroutine set_photoionization(tree, eta, num_photons, dt)
-    use m_units_constants
-
-    type(a$D_t), intent(inout) :: tree
-    real(dp), intent(in)      :: eta
-    real(dp), intent(in), optional :: dt
-    integer, intent(in)       :: num_photons
-    real(dp), parameter       :: p_quench = 30.0e-3_dp
-    real(dp)                  :: quench_fac
-
-    ! Compute quench factor, because some excited species will be quenched by
-    ! collisions, preventing the emission of a UV photon
-    quench_fac = p_quench / (ST_gas_pressure + p_quench)
-
-    ! Set photon production rate per cell, which is proportional to the
-    ! ionization rate.
-    call a$D_loop_box_arg(tree, set_photoionization_rate, [eta * quench_fac], .true.)
-
-#if $D == 2
-    call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-         i_photo, i_photo, 0.25e-3_dp, .true., ST_cylindrical, 1e-9_dp, dt)
-#elif $D == 3
-    call photoi_set_src_$Dd(tree, ST_photoi_tbl, ST_rng, num_photons, &
-         i_photo, i_photo, 0.25e-3_dp, .true., 1e-9_dp, dt)
-#endif
-
-  end subroutine set_photoionization
-
-  !> Sets the photoionization_rate
-  subroutine set_photoionization_rate(box, coeff)
-    type(box$D_t), intent(inout) :: box
-    real(dp), intent(in)        :: coeff(:)
-    integer                     :: IJK, nc
-    real(dp)                    :: fld, alpha, mobility, tmp
-    type(LT_loc_t)              :: loc
-
-    nc = box%n_cell
-
-    do KJI_DO(1,nc)
-       fld      = box%cc(IJK, i_electric_fld)
-       loc      = LT_get_loc(ST_td_tbl, fld)
-       alpha    = LT_get_col_at_loc(ST_td_tbl, i_alpha, loc)
-       mobility = LT_get_col_at_loc(ST_td_tbl, i_mobility, loc)
-
-       tmp = fld * mobility * alpha * box%cc(IJK, i_electron) * coeff(1)
-       if (tmp < 0) tmp = 0
-       box%cc(IJK, i_photo) = tmp
-    end do; CLOSE_DO
-  end subroutine set_photoionization_rate
 
   !> For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
@@ -544,7 +570,7 @@ contains
     integer, intent(in)          :: out_cnt
     character(len=*), intent(in) :: dir
     character(len=ST_slen)       :: fname
-    character(len=20)            :: fmt
+    character(len=20), save      :: fmt
     integer, parameter           :: my_unit = 123
     real(dp)                     :: velocity
     real(dp), save               :: prev_pos($D) = 0

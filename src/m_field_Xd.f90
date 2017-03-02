@@ -133,8 +133,13 @@ contains
     ! Compute field from potential
     call a$D_loop_box(tree, field_from_potential)
 
-    ! Set the field norm also in ghost cells
+    ! Set the fields also in ghost cells
     call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)
+    call a$D_gc_tree(tree, i_Ex, a$D_gc_interp, a$D_bc_neumann_zero)
+    call a$D_gc_tree(tree, i_Ey, a$D_gc_interp, a$D_bc_neumann_zero)
+#if $D == 3
+    call a$D_gc_tree(tree, i_Ez, a$D_gc_interp, a$D_bc_neumann_zero)
+#endif
   end subroutine field_compute
 
   !> Compute the electric field at a given time
@@ -321,43 +326,30 @@ contains
   !> Compute electric field from electrical potential
   subroutine field_from_potential(box)
     type(box$D_t), intent(inout) :: box
-    integer                     :: nc
-    real(dp)                    :: inv_dr
+    integer                     :: nc, IJK
+    real(dp)                    :: fac
 
     nc     = box%n_cell
-    inv_dr = 1 / box%dr
+    fac = 0.5_dp / box%dr
 
+    do KJI_DO(1,nc)
 #if $D == 2
-    box%fc(1:nc+1, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, i_phi) - box%cc(1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, i_phi) - box%cc(1:nc, 1:nc+1, i_phi))
-
-    box%cc(1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 2, electric_fld))**2)
+       box%cc(i, j, i_Ex) = (box%cc(i-1, j, i_phi) - &
+            box%cc(i+1, j, i_phi)) * fac
+       box%cc(i, j, i_Ey) = (box%cc(i, j-1, i_phi) - &
+            box%cc(i, j+1, i_phi)) * fac
+       box%cc(i, j, i_electric_fld) = norm2(box%cc(i, j, i_Ex:i_Ey))
 #elif $D == 3
-    box%fc(1:nc+1, 1:nc, 1:nc, 1, electric_fld) = inv_dr * &
-         (box%cc(0:nc, 1:nc, 1:nc, i_phi) - &
-         box%cc(1:nc+1, 1:nc, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc+1, 1:nc, 2, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 0:nc, 1:nc, i_phi) - &
-         box%cc(1:nc, 1:nc+1, 1:nc, i_phi))
-    box%fc(1:nc, 1:nc, 1:nc+1, 3, electric_fld) = inv_dr * &
-         (box%cc(1:nc, 1:nc, 0:nc, i_phi) - &
-         box%cc(1:nc, 1:nc, 1:nc+1, i_phi))
-
-    box%cc(1:nc, 1:nc, 1:nc, i_electric_fld) = 0.5_dp * sqrt(&
-         (box%fc(1:nc, 1:nc, 1:nc, 1, electric_fld) + &
-         box%fc(2:nc+1, 1:nc, 1:nc, 1, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 2, electric_fld) + &
-         box%fc(1:nc, 2:nc+1, 1:nc, 2, electric_fld))**2 + &
-         (box%fc(1:nc, 1:nc, 1:nc, 3, electric_fld) + &
-         box%fc(1:nc, 1:nc, 2:nc+1, 3, electric_fld))**2)
+       box%cc(i, j, k, i_Ex) = (box%cc(i-1, j, k, i_phi) - &
+            box%cc(i+1, j, k, i_phi)) * fac
+       box%cc(i, j, k, i_Ey) = (box%cc(i, j-1, k, i_phi) - &
+            box%cc(i, j+1, k, i_phi)) * fac
+       box%cc(i, j, k, i_Ez) = (box%cc(i, j, k-1, i_phi) - &
+            box%cc(i, j, k+1, i_phi)) * fac
+       box%cc(i, j, k, i_electric_fld) = &
+            norm2(box%cc(i, j, k, i_Ex:i_Ez))
 #endif
-
+    end do; CLOSE_DO
   end subroutine field_from_potential
 
 end module m_field_$Dd
