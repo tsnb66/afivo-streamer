@@ -131,7 +131,7 @@ contains
     call mg$D_fas_fmg(tree, mg, .false., have_guess)
 
     ! Compute field from potential
-    call a$D_loop_box(tree, field_from_potential)
+    call a$D_loop_box(tree, field_from_potential, leaves_only=.true.)
 
     ! Set the fields also in ghost cells
     call a$D_gc_tree(tree, i_electric_fld, a$D_gc_interp, a$D_bc_neumann_zero)

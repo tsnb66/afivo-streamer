@@ -60,7 +60,7 @@ program streamer_$Dd
      call a$D_loop_box(tree, init_cond_set_box)
      call field_compute(tree, mg, .false.)
      call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
-     if (ref_info%n_add == 0) exit
+     if (ref_info%n_add + ref_info%n_rm == 0) exit
   end do
 
   call a$D_print_info(tree)
@@ -136,14 +136,6 @@ program streamer_$Dd
                 r_max = ST_lineout_rmax(1:$D) * ST_domain_len, &
                 n_points=ST_lineout_npoints, dir=ST_output_dir)
         end if
-
-! #if $D == 2
-!         write(fname, "(A,I6.6)") trim(ST_simulation_name) // &
-!                 "_plane_", output_cnt
-!         call a2_write_plane(tree, trim(fname), &
-!              [i_phi], &
-!              [0.0_dp, 80e-3_dp], [5.0e-3_dp, 85e-3_dp], [512, 512], 'output')
-! #endif
      end if
 
      if (mod(it, ST_refine_per_steps) == 1) then
@@ -456,8 +448,7 @@ contains
     mu_perp = LT2_get_col_at_loc(ST_td_tbl, i_mobility_xB, loc)
     mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
 
-    vel = -mu_par * E_par - mu_perp * E_perp - mu_cross * E_cross ! TODO: check sign
-    ! print *, "get_velocity", fld
+    vel = -mu_par * E_par - mu_perp * E_perp + mu_cross * E_cross ! TODO: check sign
     ! print *, E_norm, angle
     ! print *, E_par, mu_par
     ! print *, E_perp, mu_perp
@@ -570,7 +561,7 @@ contains
     integer, intent(in)          :: out_cnt
     character(len=*), intent(in) :: dir
     character(len=ST_slen)       :: fname
-    character(len=20), save      :: fmt
+    character(len=20)            :: fmt
     integer, parameter           :: my_unit = 123
     real(dp)                     :: velocity
     real(dp), save               :: prev_pos($D) = 0
@@ -590,17 +581,21 @@ contains
 #if $D == 2
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) "&
             &"max(E) x y max(n_e) x y"
-       fmt = "(I6,11E16.8)"
 #elif $D == 3
        write(my_unit, *) "# it time dt v sum(n_e) sum(n_i) "&
             &"max(E) x y z max(n_e) x y z"
-       fmt = "(I6,13E16.8)"
 #endif
        close(my_unit)
 
        ! Start with velocity zero
        prev_pos = a$D_r_loc(tree, loc_field)
     end if
+
+#if $D == 2
+       fmt = "(I6,11E16.8)"
+#elif $D == 3
+       fmt = "(I6,13E16.8)"
+#endif
 
     velocity = norm2(a$D_r_loc(tree, loc_field) - prev_pos) / ST_dt_output
     prev_pos = a$D_r_loc(tree, loc_field)
