@@ -173,6 +173,7 @@ contains
     character(len=CFG_name_len)   :: line_fmt
     character(len=CFG_string_len) :: err_string
     character(len=CFG_string_len) :: line
+    logical                       :: append
 
     open(my_unit, FILE=trim(filename), status = "OLD", &
          action="READ", err=998, iostat=io_state)
@@ -211,7 +212,13 @@ contains
           end if
        end if
 
-       var_name = line(1 : equal_sign_ix - 1) ! Set variable name
+       if (line(equal_sign_ix-1:equal_sign_ix) == '+=') then
+          append = .true.
+          var_name = line(1 : equal_sign_ix - 2) ! Set variable name
+       else
+          append = .false.
+          var_name = line(1 : equal_sign_ix - 1) ! Set variable name
+       end if
 
        ! If there is no indent, reset to no category
        if (var_name(1:1) /= " " .and. var_name(1:1) /= char(9)) then
@@ -238,7 +245,12 @@ contains
                "Not yet created", ix, .false.)
           cfg%vars(ix)%stored_data = line
        else
-          cfg%vars(ix)%stored_data = line
+          if (append) then
+             cfg%vars(ix)%stored_data = &
+                  trim(cfg%vars(ix)%stored_data) // trim(line)
+          else
+             cfg%vars(ix)%stored_data = line
+          end if
           call read_variable(cfg%vars(ix))
        end if
     end do
