@@ -89,6 +89,9 @@ module m_streamer
   ! Refine until dx is smaller than this factor times the seed width
   real(dp), protected :: ST_refine_init_fac = 0.25_dp
 
+  ! Only mark cells for refinement above this electron density
+  real(dp), protected :: ST_refine_min_density = 0.0_dp
+
   ! Current time step
   real(dp) :: ST_dt
 
@@ -192,6 +195,8 @@ contains
          "Refine around initial conditions up to this time")
     call CFG_add_get(cfg, "refine_init_fac", ST_refine_init_fac, &
          "Refine until dx is smaller than this factor times the seed width")
+    call CFG_add_get(cfg, "refine_min_density", ST_refine_min_density, &
+         "Only mark cells for refinement above this electron density")
 
   end subroutine ST_initialize
 

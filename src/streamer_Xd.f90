@@ -103,14 +103,19 @@ program streamer_$Dd
         ! Update the solution
         call a$D_loop_box_arg(tree, update_solution, [ST_dt], .true.)
 
-        ! Compute new field on first iteration
-        if (i == 1) call field_compute(tree, mg, .true.)
+        if (i == 1) then
+           call field_compute(tree, mg, .true.)
+           call a$D_restrict_tree(tree, i_electron)
+        end if
      end do
 
      ST_time = ST_time - ST_dt        ! Go back one time step
 
-     ! Take average of phi_old and phi (explicit trapezoidal rule)
+     ! Take average (explicit trapezoidal rule)
      call a$D_loop_box(tree, average_density)
+
+     ! Restrict electron density (so ghost cells are filled correctly)
+     call a$D_restrict_tree(tree, i_electron)
 
      ! Compute field with new density
      call field_compute(tree, mg, .true.)
@@ -207,7 +212,7 @@ contains
     integer                  :: IJK, n, nc
     real(dp)                 :: cphi, dx, dx2
     real(dp)                 :: alpha, adx, fld($D), vel($D)
-    real(dp)                 :: dist
+    real(dp)                 :: dist, dns
     type(LT2_loc_t) :: loc
 
     nc      = box%n_cell
@@ -221,13 +226,15 @@ contains
        alpha = LT2_get_col_at_loc(ST_td_tbl, i_alpha, loc)
        ! The refinement is based on the ionization length
        adx   = box%dr * alpha
+       dns = box%cc(IJK, i_electron)
 
        ! The refinement is also based on the intensity of the source term.
        ! Here we estimate the curvature of phi (given by dx**2 *
        ! Laplacian(phi))
        cphi = dx2 * abs(box%cc(IJK, i_rhs))
 
-       if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1) then
+       if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1 .and. &
+            dns > ST_refine_min_density) then
           cell_flags(IJK) = af_do_ref
        else if (adx < 0.125_dp * ST_refine_adx .and. &
             cphi < 0.0625_dp * ST_refine_cphi &
