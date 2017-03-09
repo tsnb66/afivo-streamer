@@ -398,12 +398,16 @@ contains
 #if $D == 2
           fld = 0.5_dp * (boxes(id)%cc(n-1, m, i_Ex:i_Ey) + &
                boxes(id)%cc(n, m, i_Ex:i_Ey))
+          fld(1) = inv_dr * (boxes(id)%cc(n-1, m, i_phi) - &
+               boxes(id)%cc(n, m, i_phi))
           call get_velocity(fld, vel, loc)
           v(n, m, 1)  = vel(1)
           dc(n, m, 1) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
 
           fld       = 0.5_dp * (boxes(id)%cc(m, n-1, i_Ex:i_Ey) + &
                boxes(id)%cc(m, n, i_Ex:i_Ey))
+          fld(2) = inv_dr * (boxes(id)%cc(m, n-1, i_phi) - &
+               boxes(id)%cc(m, n, i_phi))
           call get_velocity(fld, vel, loc)
           v(m, n, 2)  = vel(2)
           dc(m, n, 2) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
@@ -412,6 +416,8 @@ contains
              fld = 0.5_dp * (&
                   boxes(id)%cc(n-1, m, l, i_Ex:i_Ez) + &
                   boxes(id)%cc(n, m, l, i_Ex:i_Ez))
+             fld(1) = inv_dr * (boxes(id)%cc(n, m, l, i_phi) - &
+               boxes(id)%cc(n-1, m, l, i_phi))
              call get_velocity(fld, vel, loc)
              v(n, m, l, 1)  = vel(1)
              dc(n, m, l, 1) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
@@ -419,6 +425,8 @@ contains
              fld = 0.5_dp * (&
                   boxes(id)%cc(m, n-1, l, i_Ex:i_Ez) + &
                   boxes(id)%cc(m, n, l, i_Ex:i_Ez))
+             fld(2) = inv_dr * (boxes(id)%cc(m, n-1, l, i_phi) - &
+               boxes(id)%cc(m, n, l, i_phi))
              call get_velocity(fld, vel, loc)
              v(m, n, l, 2)  = vel(2)
              dc(m, n, l, 2) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
@@ -426,6 +434,8 @@ contains
              fld = 0.5_dp * (&
                   boxes(id)%cc(m, l, n-1, i_Ex:i_Ez) + &
                   boxes(id)%cc(m, l, n, i_Ex:i_Ez))
+             fld(3) = inv_dr * (boxes(id)%cc(m, l, n-1, i_phi) - &
+               boxes(id)%cc(m, l, n, i_phi))
              call get_velocity(fld, vel, loc)
              v(m, l, n, 3)  = vel(3)
              dc(m, l, n, 3) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
