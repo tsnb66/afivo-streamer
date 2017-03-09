@@ -114,7 +114,7 @@ program streamer_$Dd
      ! Take average (explicit trapezoidal rule)
      call a$D_loop_box(tree, average_density)
 
-     ! Restrict electron density (so ghost cells are filled correctly)
+     ! Restrict electron density (so coarse block ghost cells are filled correctly)
      call a$D_restrict_tree(tree, i_electron)
 
      ! Compute field with new density
@@ -275,7 +275,7 @@ contains
     type(box$D_t), intent(in) :: box
     integer, intent(in)      :: n_cond
     integer                  :: IJK, nc
-    real(dp)                 :: fld($D), vel($D), diffc, mu_par, tmp
+    real(dp)                 :: fld($D), vel($D), diffc, mu_par, mu_cross, tmp
     real(dp)                 :: dt_vec(n_cond)
     type(LT2_loc_t) :: loc
 
@@ -288,14 +288,15 @@ contains
        call get_velocity(fld, vel, loc)
        diffc = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
        mu_par = LT2_get_col_at_loc(ST_td_tbl, i_mobility_B, loc)
+       mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
 
        ! The 0.5 is here because of the explicit trapezoidal rule
        tmp = 0.5_dp / max(sum(abs(vel) / box%dr), epsilon(1.0_dp))
        dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), tmp)
 
-       ! Dielectric relaxation time (using mu_par, which is the highest)
+       ! Dielectric relaxation time (using highest mobility)
        dt_vec(ST_ix_drt) = min(dt_vec(ST_ix_drt), &
-            UC_eps0 / (UC_elem_charge * mu_par * &
+            UC_eps0 / (UC_elem_charge * max(mu_par, mu_cross) * &
             max(box%cc(IJK, i_electron), epsilon(1.0_dp))))
 
        ! Diffusion condition
@@ -455,7 +456,7 @@ contains
     mu_perp = LT2_get_col_at_loc(ST_td_tbl, i_mobility_xB, loc)
     mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
 
-    vel = -mu_par * E_par - mu_perp * E_perp + mu_cross * E_cross ! TODO: check sign
+    vel = -mu_par * E_par - mu_perp * E_perp + mu_cross * E_cross
     ! print *, E_norm, angle
     ! print *, E_par, mu_par
     ! print *, E_perp, mu_perp

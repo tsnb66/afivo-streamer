@@ -69,7 +69,7 @@ module m_streamer
   integer, protected :: ST_refine_per_steps = 2
 
   ! The grid spacing will always be larger than this value
-  real(dp), protected :: ST_refine_min_dx = 1.0e-6_dp
+  real(dp), protected :: ST_refine_min_dx = 1.0e-7_dp
 
   ! The grid spacing will always be smaller than this value
   real(dp), protected :: ST_refine_max_dx = 1.0e-3_dp
