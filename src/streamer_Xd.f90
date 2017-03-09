@@ -26,7 +26,8 @@ program streamer_$Dd
 
   B0_hat = [1.0_dp, 0.0_dp, 0.0_dp]
   call CFG_add_get(cfg, "magnetic_field_unitvec", B0_hat, &
-       "Unitvector of magnetic field")
+       "Unitvector of magnetic field (automatically normalized)")
+  B0_hat = B0_hat / norm2(B0_hat)
 
   call ST_initialize(cfg, $D)
   call ST_load_transport_data(cfg)
@@ -467,12 +468,6 @@ contains
     mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
 
     vel = -mu_par * E_par - mu_perp * E_perp + mu_cross * E_cross
-    ! print *, E_norm, angle
-    ! print *, E_par, mu_par
-    ! print *, E_perp, mu_perp
-    ! print *, E_cross, mu_cross
-    ! print *, "-------"
-    ! stop
   end subroutine get_velocity
 
   !> Take average of new and old electron/ion density for explicit trapezoidal rule
