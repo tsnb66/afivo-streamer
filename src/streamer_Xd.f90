@@ -416,8 +416,8 @@ contains
              fld = 0.5_dp * (&
                   boxes(id)%cc(n-1, m, l, i_Ex:i_Ez) + &
                   boxes(id)%cc(n, m, l, i_Ex:i_Ez))
-             fld(1) = inv_dr * (boxes(id)%cc(n, m, l, i_phi) - &
-               boxes(id)%cc(n-1, m, l, i_phi))
+             fld(1) = inv_dr * (boxes(id)%cc(n-1, m, l, i_phi) - &
+                  boxes(id)%cc(n, m, l, i_phi))
              call get_velocity(fld, vel, loc)
              v(n, m, l, 1)  = vel(1)
              dc(n, m, l, 1) = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
