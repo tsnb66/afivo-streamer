@@ -332,8 +332,8 @@ contains
     E_norm = norm2(E)
     E_hat = E / E_norm
 
-    E_perp = E - sum(E_hat * B0_hat(1:$D)) * E
-    E_par = E - E_perp
+    E_par = sum(E * B0_hat(1:$D)) * B0_hat(1:$D)
+    E_perp = E - E_par
 
 #if $D == 2
     tmp(1:2) = E
@@ -466,7 +466,6 @@ contains
     mu_par = LT2_get_col_at_loc(ST_td_tbl, i_mobility_B, loc)
     mu_perp = LT2_get_col_at_loc(ST_td_tbl, i_mobility_xB, loc)
     mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
-
     vel = -mu_par * E_par - mu_perp * E_perp + mu_cross * E_cross
   end subroutine get_velocity
 
