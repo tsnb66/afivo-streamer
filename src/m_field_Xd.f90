@@ -168,6 +168,7 @@ contains
 
   !> This fills ghost cells near physical boundaries for the potential
   subroutine field_bc_homogeneous(box, nb, iv, bc_type)
+    use m_a$D_ghostcell
     type(box$D_t), intent(inout) :: box
     integer, intent(in)         :: nb ! Direction for the boundary condition
     integer, intent(in)         :: iv ! Index of variable
@@ -178,12 +179,6 @@ contains
 
     select case (nb)
 #if $D == 2
-    case (a$D_neighb_lowx)
-       bc_type = af_bc_neumann
-       box%cc(   0, 1:nc, iv) = 0
-    case (a$D_neighb_highx)
-       bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, iv) = 0
     case (a$D_neighb_lowy)
        bc_type = af_bc_dirichlet
        box%cc(1:nc,    0, iv) = 0
@@ -191,18 +186,6 @@ contains
        bc_type = af_bc_dirichlet
        box%cc(1:nc, nc+1, iv) = field_voltage
 #elif $D == 3
-    case (a3_neighb_lowx)
-       bc_type = af_bc_neumann
-       box%cc(   0, 1:nc, 1:nc, iv) = 0
-    case (a3_neighb_highx)
-       bc_type = af_bc_neumann
-       box%cc(nc+1, 1:nc, 1:nc, iv) = 0
-    case (a3_neighb_lowy)
-       bc_type = af_bc_neumann
-       box%cc(1:nc,    0, 1:nc, iv) = 0
-    case (a3_neighb_highy)
-       bc_type = af_bc_neumann
-       box%cc(1:nc, nc+1, 1:nc, iv) = 0
     case (a3_neighb_lowz)
        bc_type = af_bc_dirichlet
        box%cc(1:nc, 1:nc,    0, iv) = 0
@@ -210,6 +193,8 @@ contains
        bc_type = af_bc_dirichlet
        box%cc(1:nc, 1:nc, nc+1, iv) = field_voltage
 #endif
+    case default
+       call a$D_bc_continuous(box, nb, iv, bc_type)
     end select
 
   end subroutine field_bc_homogeneous
