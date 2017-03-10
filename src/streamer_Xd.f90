@@ -72,7 +72,7 @@ program streamer_$Dd
           [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
      ST_dt = minval(ST_dt_vec)
 
-     if (ST_dt < 1e-14) then
+     if (ST_dt < ST_dt_min) then
         print *, "ST_dt getting too small, instability?"
         print *, ST_dt_vec
         exit

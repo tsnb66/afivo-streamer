@@ -113,6 +113,9 @@ module m_streamer
   ! Maximum allowed time step
   real(dp), protected :: ST_dt_max = 1.0e-11_dp
 
+  ! Minimum allowed time step
+  real(dp), protected :: ST_dt_min = 1.0e-14_dp
+
   ! Time between writing output
   real(dp), protected :: ST_dt_output = 1.0e-10_dp
 
@@ -168,6 +171,8 @@ contains
          "The timestep for writing output (s)")
     call CFG_add_get(cfg, "dt_max", ST_dt_max, &
          "The maximum timestep (s)")
+    call CFG_add_get(cfg, "dt_min", ST_dt_min, &
+         "The minimum allowed timestep (s) (stop if smaller)")
 
     call CFG_add_get(cfg, "lineout_write", ST_lineout_write, &
          "Write output along a line")
