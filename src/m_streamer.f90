@@ -90,7 +90,7 @@ module m_streamer
   real(dp), protected :: ST_refine_init_fac = 0.25_dp
 
   ! Only mark cells for refinement above this electron density
-  real(dp), protected :: ST_refine_min_density = 0.0_dp
+  real(dp), protected :: ST_refine_min_density = -1.0_dp
 
   ! Current time step
   real(dp) :: ST_dt
@@ -241,7 +241,7 @@ contains
 
     ! Create a lookup table for the model coefficients
     ST_td_tbl = LT2_create([0.0_dp, 0.0_dp], &
-         [90.0_dp, max_electric_fld], [20, table_size], n_var_td)
+         [90.0_dp, max_electric_fld], [19, table_size], n_var_td)
 
     ! Fill table with data
     data_name = "efield[V/m]_vs_muB[m2/Vs]"

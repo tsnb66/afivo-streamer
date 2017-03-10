@@ -237,9 +237,10 @@ contains
        if (adx / ST_refine_adx + cphi / ST_refine_cphi > 1 .and. &
             dns > ST_refine_min_density) then
           cell_flags(IJK) = af_do_ref
-       else if (adx < 0.125_dp * ST_refine_adx .and. &
-            cphi < 0.0625_dp * ST_refine_cphi &
-            .and. dx < ST_derefine_dx) then
+       else if ((adx < 0.125_dp * ST_refine_adx .and. &
+            cphi < 0.0625_dp * ST_refine_cphi .or. &
+            dns < ST_refine_min_density) &
+            .and. 2 * dx < ST_derefine_dx) then
           cell_flags(IJK) = af_rm_ref
        else
           cell_flags(IJK) = af_keep_ref
@@ -547,9 +548,9 @@ contains
        do i = 1, size(ref_info%lvls(lvl)%add)
           id = ref_info%lvls(lvl)%add(i)
           p_id = tree%boxes(id)%parent
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_electron)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
-          call a$D_prolong_sparse(tree%boxes(p_id), tree%boxes(id), i_phi)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_electron)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_pos_ion)
+          call a$D_prolong_linear(tree%boxes(p_id), tree%boxes(id), i_phi)
        end do
        !$omp end parallel do
 
