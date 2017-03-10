@@ -27,7 +27,7 @@ module m_streamer
   integer, parameter :: i_phi          = 5 ! Electrical potential
   integer, parameter :: i_electric_fld = 6 ! Electric field norm
   integer, parameter :: i_rhs          = 7 ! Source term Poisson
-  integer, parameter :: i_alpha_cc = 8
+  integer, parameter :: i_src_rate = 8
   integer, parameter :: i_Ex = 9
   integer, parameter :: i_Ey = 10
   integer, parameter :: i_Ez = 11
@@ -35,7 +35,7 @@ module m_streamer
   ! Names of the cell-centered variables
   character(len=12) :: ST_cc_names(n_var_cell_3d) = &
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "alpha", &
+       "pos_ion_old", "phi", "electric_fld", "rhs", "src_rate", &
        "Ex", "Ey", "Ez"]
 
   ! ** Indices of face-centered variables **
