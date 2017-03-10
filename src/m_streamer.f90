@@ -18,8 +18,8 @@ module m_streamer
   integer, parameter :: ST_slen = 200
 
   ! ** Indices of cell-centered variables **
-  integer, parameter :: n_var_cell_2d     = 9 ! Number of variables
-  integer, parameter :: n_var_cell_3d     = 10 ! Number of variables
+  integer, parameter :: n_var_cell_2d     = 10 ! Number of variables
+  integer, parameter :: n_var_cell_3d     = 11 ! Number of variables
   integer, parameter :: i_electron     = 1 ! Electron density
   integer, parameter :: i_pos_ion      = 2 ! Positive ion density
   integer, parameter :: i_electron_old = 3 ! For time-stepping scheme
@@ -27,15 +27,16 @@ module m_streamer
   integer, parameter :: i_phi          = 5 ! Electrical potential
   integer, parameter :: i_electric_fld = 6 ! Electric field norm
   integer, parameter :: i_rhs          = 7 ! Source term Poisson
-  integer, parameter :: i_Ex = 8
-  integer, parameter :: i_Ey = 9
-  integer, parameter :: i_Ez = 10
-
+  integer, parameter :: i_alpha_cc = 8
+  integer, parameter :: i_Ex = 9
+  integer, parameter :: i_Ey = 10
+  integer, parameter :: i_Ez = 11
 
   ! Names of the cell-centered variables
   character(len=12) :: ST_cc_names(n_var_cell_3d) = &
        [character(len=12) :: "electron", "pos_ion", "electron_old", &
-       "pos_ion_old", "phi", "electric_fld", "rhs", "Ex", "Ey", "Ez"]
+       "pos_ion_old", "phi", "electric_fld", "rhs", "alpha", &
+       "Ex", "Ey", "Ez"]
 
   ! ** Indices of face-centered variables **
   integer, parameter :: n_var_face   = 1 ! Number of variables

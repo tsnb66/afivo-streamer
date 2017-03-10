@@ -122,9 +122,12 @@ program streamer_$Dd
      call field_compute(tree, mg, .true.)
 
      if (write_out) then
+        call a$D_loop_box(tree, box_set_alpha)
+
         ! Fill ghost cells before writing output
-        call a$D_gc_tree(tree, i_electron, a$D_gc_interp_lim, a$D_bc_neumann_zero)
-        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp_lim, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_electron, a$D_gc_interp, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_pos_ion, a$D_gc_interp, a$D_bc_neumann_zero)
+        call a$D_gc_tree(tree, i_alpha_cc, a$D_gc_interp, a$D_bc_neumann_zero)
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
         call a$D_write_silo(tree, fname, output_cnt, &
@@ -535,6 +538,23 @@ contains
 
     end do; CLOSE_DO
   end subroutine update_solution
+
+  subroutine box_set_alpha(box)
+    type(box$D_t), intent(inout) :: box
+    real(dp)                     :: fld($D), vel($D)
+    integer                      :: IJK, nc
+    type(LT2_loc_t)               :: loc
+
+    nc     = box%n_cell
+
+    do KJI_DO(1,nc)
+       fld   = box%cc(IJK, i_Ex:i_Ex+$D-1)
+       call get_velocity(fld, vel, loc)
+
+       box%cc(IJK, i_alpha_cc) = &
+            LT2_get_col_at_loc(ST_td_tbl, i_alpha, loc)
+    end do; CLOSE_DO
+  end subroutine box_set_alpha
 
   !> For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
