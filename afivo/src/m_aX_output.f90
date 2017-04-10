@@ -8,6 +8,9 @@ module m_a$D_output
   private
 
   public :: a$D_prepend_directory
+  public :: a$D_write_tree
+  public :: a$D_read_tree
+  public :: a$D_tree_copy_variable
   public :: a$D_write_vtk
   public :: a$D_write_silo
   public :: a$D_write_line
@@ -31,8 +34,191 @@ contains
              out_name = trim(dir) // "/" // trim(filename)
           end if
        end if
+    else
+       out_name = filename
     end if
   end subroutine a$D_prepend_directory
+
+  !> Write full tree in binary format
+  subroutine a$D_write_tree(tree, filename, dir)
+    type(a$D_t), intent(in)                :: tree     !< Tree to write out
+    character(len=*), intent(in)           :: filename !< Filename for the output
+    character(len=*), optional, intent(in) :: dir      !< Directory to place output in
+    integer                                :: my_unit, lvl, id
+    character(len=400)                     :: fname
+
+    call a$D_prepend_directory(trim(filename) // ".dat", dir, fname)
+
+    open(newunit=my_unit, file=trim(fname), form='unformatted', &
+         access='stream', status='replace')
+
+    write(my_unit) tree%ready       !< Is tree ready for use?
+    write(my_unit) tree%lvl_limit   !< maximum allowed level
+    write(my_unit) tree%box_limit   !< maximum number of boxes
+    write(my_unit) tree%highest_lvl !< highest level present
+    write(my_unit) tree%highest_id  !< highest box index present
+    write(my_unit) tree%n_cell      !< number of cells per dimension
+    write(my_unit) tree%n_var_cell  !< number of cell-centered variables
+    write(my_unit) tree%n_var_face  !< number of face-centered variables
+    write(my_unit) tree%coord_t     !< Type of coordinates
+    write(my_unit) tree%r_base(:)   !< min. coords of box at index (1,1)
+    write(my_unit) tree%dr_base     !< cell spacing at lvl 1
+
+    write(my_unit) tree%cc_names(:)
+    write(my_unit) tree%fc_names(:)
+
+    write(my_unit) lbound(tree%lvls, 1) ! Will become 1 in future
+
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+      write(my_unit) size(tree%lvls(lvl)%ids)
+      write(my_unit) tree%lvls(lvl)%ids
+
+      write(my_unit) size(tree%lvls(lvl)%leaves)
+      write(my_unit) tree%lvls(lvl)%leaves
+
+      write(my_unit) size(tree%lvls(lvl)%parents)
+      write(my_unit) tree%lvls(lvl)%parents
+    end do
+
+    do id = 1, tree%highest_id
+      write(my_unit) tree%boxes(id)%in_use  !< is the box in use?
+      if (.not. tree%boxes(id)%in_use) cycle
+
+      write(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
+      write(my_unit) tree%boxes(id)%lvl     !< level of the box
+      write(my_unit) tree%boxes(id)%tag     !< for the user
+      write(my_unit) tree%boxes(id)%ix      !< index in the domain
+      write(my_unit) tree%boxes(id)%parent  !< index of parent in box list
+      write(my_unit) tree%boxes(id)%children
+      write(my_unit) tree%boxes(id)%neighbors
+      write(my_unit) tree%boxes(id)%dr      !< width/height of a cell
+      write(my_unit) tree%boxes(id)%r_min   !< min coords. of box
+      write(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
+      write(my_unit) tree%boxes(id)%cc
+      write(my_unit) tree%boxes(id)%fc
+    end do
+
+    close(my_unit)
+    print *, "a$D_write_tree: written " // trim(fname)
+  end subroutine a$D_write_tree
+
+  !> Read full tree in binary format
+  subroutine a$D_read_tree(tree, filename)
+    use m_a$D_core, only: a$D_init_box
+    type(a$D_t), intent(out)               :: tree    !< Tree to read in
+    character(len=*), intent(in)           :: filename !< Filename for the input
+    integer                                :: my_unit, lvl, n, id
+
+    open(newunit=my_unit, file=trim(filename), form='unformatted', &
+         access='stream', status='old', action='read')
+
+    read(my_unit) tree%ready       !< Is tree ready for use?
+    read(my_unit) tree%lvl_limit   !< maximum allowed level
+    read(my_unit) tree%box_limit   !< maximum number of boxes
+    read(my_unit) tree%highest_lvl !< highest level present
+    read(my_unit) tree%highest_id  !< highest box index present
+    read(my_unit) tree%n_cell      !< number of cells per dimension
+    read(my_unit) tree%n_var_cell  !< number of cell-centered variables
+    read(my_unit) tree%n_var_face  !< number of face-centered variables
+    read(my_unit) tree%coord_t     !< Type of coordinates
+    read(my_unit) tree%r_base(:)   !< min. coords of box at index (1,1)
+    read(my_unit) tree%dr_base     !< cell spacing at lvl 1
+
+    allocate(tree%cc_names(tree%n_var_cell))
+    allocate(tree%fc_names(tree%n_var_face))
+    read(my_unit) tree%cc_names(:)
+    read(my_unit) tree%fc_names(:)
+
+    read(my_unit) lvl
+    allocate(tree%lvls(lvl:tree%lvl_limit))
+
+    do lvl = lbound(tree%lvls, 1), tree%highest_lvl
+      read(my_unit) n
+      allocate(tree%lvls(lvl)%ids(n))
+      read(my_unit) tree%lvls(lvl)%ids
+
+      read(my_unit) n
+      allocate(tree%lvls(lvl)%leaves(n))
+      read(my_unit) tree%lvls(lvl)%leaves
+
+      read(my_unit) n
+      allocate(tree%lvls(lvl)%parents(n))
+      read(my_unit) tree%lvls(lvl)%parents
+    end do
+
+    do lvl = tree%highest_lvl+1, tree%lvl_limit
+      allocate(tree%lvls(lvl)%ids(0))
+      allocate(tree%lvls(lvl)%leaves(0))
+      allocate(tree%lvls(lvl)%parents(0))
+    end do
+
+    allocate(tree%boxes(tree%highest_id))
+
+    do id = 1, tree%highest_id
+      read(my_unit) tree%boxes(id)%in_use  !< is the box in use?
+      if (.not. tree%boxes(id)%in_use) cycle
+
+      ! Some boxes can have a different size
+      read(my_unit) tree%boxes(id)%n_cell  !< number of cells per dimension
+      call a$D_init_box(tree%boxes(id), tree%boxes(id)%n_cell, &
+          tree%n_var_cell, tree%n_var_face)
+
+      read(my_unit) tree%boxes(id)%lvl     !< level of the box
+      read(my_unit) tree%boxes(id)%tag     !< for the user
+      read(my_unit) tree%boxes(id)%ix      !< index in the domain
+      read(my_unit) tree%boxes(id)%parent  !< index of parent in box list
+      read(my_unit) tree%boxes(id)%children
+      read(my_unit) tree%boxes(id)%neighbors
+      read(my_unit) tree%boxes(id)%dr      !< width/height of a cell
+      read(my_unit) tree%boxes(id)%r_min   !< min coords. of box
+      read(my_unit) tree%boxes(id)%coord_t !< Coordinate type (e.g. Cartesian)
+      read(my_unit) tree%boxes(id)%cc
+      read(my_unit) tree%boxes(id)%fc
+    end do
+
+    close(my_unit)
+  end subroutine a$D_read_tree
+
+  subroutine a$D_tree_copy_variable(tree_from, ivs_from, tree_to, ivs_to)
+    use m_a$D_interp
+    type(a$D_t), intent(in)    :: tree_from   !< Copy from this grid
+    integer, intent(in)        :: ivs_from(:) !< From these variable
+    type(a$D_t), intent(inout) :: tree_to     !< Copy to this grid
+    integer, intent(in)        :: ivs_to(:)   !< To these variable
+    integer                    :: lvl, id, n, nc, i, j, k
+    real(dp)                   :: rr($D)
+
+    !$omp parallel private(lvl, id, n, nc, i, j, k, rr)
+    do lvl = 1, tree_to%highest_lvl
+       !$omp do
+       do n = 1, size(tree_to%lvls(lvl)%leaves)
+          id = tree_to%lvls(lvl)%leaves(n)
+          nc = tree_to%boxes(id)%n_cell
+#if $D == 2
+          do j = 1, nc
+             do i = 1, nc
+                rr = a$D_r_cc(tree_to%boxes(id), [i, j])
+                tree_to%boxes(id)%cc(i, j, ivs_to) = &
+                     a$D_interp1(tree_from, rr, [ivs_from], size(ivs_from))
+             end do
+          end do
+#elif $D == 3
+          do k = 1, nc
+             do j = 1, nc
+                do i = 1, nc
+                   rr = a$D_r_cc(tree_to%boxes(id), [i, j, k])
+                   tree_to%boxes(id)%cc(i, j, k, ivs_to) = &
+                        a$D_interp1(tree_from, rr, [ivs_from], size(ivs_from))
+                end do
+             end do
+          end do
+#endif
+       end do
+       !$omp end do
+    end do
+    !$omp end parallel
+
+  end subroutine a$D_tree_copy_variable
 
   !> Write line data in a text file
   subroutine a$D_write_line(tree, filename, ivs, r_min, r_max, n_points, dir)
