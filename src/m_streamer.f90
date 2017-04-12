@@ -66,6 +66,9 @@ module m_streamer
   ! Output directory
   character(len=ST_slen), protected :: ST_output_dir = "output"
 
+  ! Restart from this file (if given)
+  character(len=ST_slen), protected :: ST_restart_file = ""
+
   ! The number of steps after which the mesh is updated
   integer, protected :: ST_refine_per_steps = 2
 
@@ -166,6 +169,8 @@ contains
          "The name of the simulation")
     call CFG_add_get(cfg, "output_dir", ST_output_dir, &
          "Directory where the output should be written")
+    call CFG_add_get(cfg, "restart_file", ST_restart_file, &
+         "Restart from this file (if given)")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "domain_len", ST_domain_len, &

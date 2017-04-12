@@ -37,9 +37,6 @@ program streamer_$Dd
   fname = trim(ST_output_dir) // "/" // trim(ST_simulation_name) // "_out.cfg"
   call CFG_write(cfg, trim(fname))
 
-  ! Initialize the tree (which contains all the mesh information)
-  call init_tree(tree)
-
   ! Set the multigrid options. First define the variables to use
   mg%i_phi = i_phi
   mg%i_tmp = i_electric_fld
@@ -53,16 +50,23 @@ program streamer_$Dd
   ! This routine always needs to be called when using multigrid
   call mg$D_init_mg(mg)
 
+  ! Initialize the tree (which contains all the mesh information)
+  if (ST_restart_file == "") then
+     call init_tree(tree)
+
+     ! Set up the initial conditions
+     do
+        call a$D_loop_box(tree, init_cond_set_box)
+        call field_compute(tree, mg, .false.)
+        call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
+        if (ref_info%n_add + ref_info%n_rm == 0) exit
+     end do
+  else
+     call a$D_read_tree(tree, trim(ST_restart_file))
+  end if
+
   output_cnt = 0 ! Number of output files written
   ST_time    = 0 ! Simulation time (all times are in s)
-
-  ! Set up the initial conditions
-  do
-     call a$D_loop_box(tree, init_cond_set_box)
-     call field_compute(tree, mg, .false.)
-     call a$D_adjust_refinement(tree, refine_routine, ref_info, 4)
-     if (ref_info%n_add + ref_info%n_rm == 0) exit
-  end do
 
   call a$D_print_info(tree)
 
@@ -629,9 +633,9 @@ contains
     end if
 
 #if $D == 2
-       fmt = "(I6,11E16.8)"
+    fmt = "(I6,11E16.8)"
 #elif $D == 3
-       fmt = "(I6,13E16.8)"
+    fmt = "(I6,13E16.8)"
 #endif
 
     velocity = norm2(a$D_r_loc(tree, loc_field) - prev_pos) / ST_dt_output
