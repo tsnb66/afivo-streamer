@@ -135,7 +135,7 @@ program streamer_$Dd
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
         call a$D_write_silo(tree, fname, output_cnt, &
-             ST_time, dir=ST_output_dir)
+             ST_time, dir=ST_output_dir, add_vars=add_velocity, add_names=["v1", "v2"])
 
         if (ST_datfile_write) then
            call a$D_write_tree(tree, fname, ST_output_dir)
@@ -563,6 +563,26 @@ contains
             LT2_get_col_at_loc(ST_td_tbl, i_alpha, loc) * norm2(vel)
     end do; CLOSE_DO
   end subroutine box_set_src_rate
+
+  subroutine add_velocity(box, v, n_var)
+    type(box$D_t), intent(in) :: box
+    integer, intent(in)       :: n_var
+#if $D == 2
+    real(dp)                  :: v(0:box%n_cell+1, 0:box%n_cell+1, n_var)
+#elif $D == 3
+    real(dp)                  :: v(0:box%n_cell+1, 0:box%n_cell+1, &
+         0:box%n_cell+1, n_var)
+#endif
+
+    integer         :: IJK
+    real(dp)        :: fld($D)
+    type(LT2_loc_t) :: loc
+
+    do KJI_DO(0,box%n_cell+1)
+       fld   = box%cc(IJK, i_Ex:i_Ex+$D-1)
+       call get_velocity(fld, v(IJK, 1:$D), loc)
+    end do; CLOSE_DO
+  end subroutine add_velocity
 
   !> For each box that gets refined, set data on its children using this routine
   subroutine prolong_to_new_boxes(tree, ref_info)
