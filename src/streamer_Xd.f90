@@ -74,7 +74,7 @@ program streamer_$Dd
      ! Get a new time step, which is at most dt_amr
      call a$D_reduction_vec(tree, get_max_dt, get_min, &
           [ST_dt_max, ST_dt_max, ST_dt_max], ST_dt_vec, ST_dt_num_cond)
-     ST_dt = minval(ST_dt_vec)
+     ST_dt = 0.9_dp * minval(ST_dt_vec)
 
      if (ST_dt < ST_dt_min) then
         print *, "ST_dt getting too small, instability?"
@@ -134,8 +134,15 @@ program streamer_$Dd
         call a$D_gc_tree(tree, i_src_rate, a$D_gc_interp, a$D_bc_neumann_zero)
 
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
+#if $D == 2
         call a$D_write_silo(tree, fname, output_cnt, &
-             ST_time, dir=ST_output_dir, add_vars=add_velocity, add_names=["v1", "v2"])
+             ST_time, dir=ST_output_dir, add_vars=add_velocity, &
+             add_names=["v1", "v2"])
+#elif $D == 3
+        call a$D_write_silo(tree, fname, output_cnt, &
+             ST_time, dir=ST_output_dir, add_vars=add_velocity, &
+             add_names=["v1", "v2", "v3"])
+#endif
 
         if (ST_datfile_write) then
            call a$D_write_tree(tree, fname, ST_output_dir)
@@ -286,11 +293,13 @@ contains
   function get_max_dt(box, n_cond) result(dt_vec)
     use m_units_constants
     type(box$D_t), intent(in) :: box
-    integer, intent(in)      :: n_cond
-    integer                  :: IJK, nc
-    real(dp)                 :: fld($D), vel($D), diffc, mu_par, mu_cross, tmp
-    real(dp)                 :: dt_vec(n_cond)
-    type(LT2_loc_t) :: loc
+    integer, intent(in)       :: n_cond
+    integer                   :: IJK, nc
+    real(dp)                  :: fld($D), vel($D), diffc
+    real(dp)                  :: mu_par, mu_cross, mu_perp
+    real(dp)                  :: dt_cfl, dt_dif
+    real(dp)                  :: dt_vec(n_cond)
+    type(LT2_loc_t)           :: loc
 
     nc = box%n_cell
     dt_vec = ST_dt_max
@@ -302,19 +311,26 @@ contains
        diffc = LT2_get_col_at_loc(ST_td_tbl, i_diffusion, loc)
        mu_par = LT2_get_col_at_loc(ST_td_tbl, i_mobility_B, loc)
        mu_cross = LT2_get_col_at_loc(ST_td_tbl, i_mobility_ExB, loc)
+       mu_perp = LT2_get_col_at_loc(ST_td_tbl, i_mobility_xB, loc)
 
-       ! The 0.5 is here because of the explicit trapezoidal rule
-       tmp = 0.5_dp / max(sum(abs(vel) / box%dr), epsilon(1.0_dp))
-       dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), tmp)
+       ! CFL and diffusion limit
+       dt_cfl = 1.0_dp / max(sum(abs(vel) / box%dr), epsilon(1.0_dp))
+       dt_dif = box%dr**2 / max(2 * $D * diffc, epsilon(1.0_dp))
+
+       ! Take the minimum of the CFL condition with Courant number 0.5 and the
+       ! combined CFL-diffusion condition with Courant number 1.0. The 0.5 is
+       ! emperical, to have good accuracy (and TVD/positivity) in combination
+       ! with the explicit trapezoidal rule
+       dt_cfl = min(0.5_dp * dt_cfl, 1/(1/dt_cfl + 1/dt_dif))
+
+       dt_vec(ST_ix_cfl) = min(dt_vec(ST_ix_cfl), dt_cfl)
+       dt_vec(ST_ix_diff) = min(dt_vec(ST_ix_diff), dt_dif)
 
        ! Dielectric relaxation time (using highest mobility)
        dt_vec(ST_ix_drt) = min(dt_vec(ST_ix_drt), &
-            UC_eps0 / (UC_elem_charge * max(mu_par, mu_cross) * &
+            UC_eps0 / (UC_elem_charge * max(mu_par, mu_cross+mu_perp) * &
             max(box%cc(IJK, i_electron), epsilon(1.0_dp))))
 
-       ! Diffusion condition
-       dt_vec(ST_ix_diff) = min(dt_vec(ST_ix_diff), &
-            0.25_dp * box%dr**2 / max(diffc, epsilon(1.0_dp)))
     end do; CLOSE_DO
 
   end function get_max_dt
@@ -336,15 +352,12 @@ contains
     real(dp), intent(in) :: E($D)
     real(dp), intent(out) :: E_par($D), E_perp($D)
     real(dp), intent(out) :: E_cross($D), E_norm
-    real(dp) :: E_hat($D)
 #if $D == 2
     real(dp) :: tmp(3)
 #endif
 
     E_norm = norm2(E)
-    E_hat = E / E_norm
-
-    E_par = sum(E * B0_hat(1:$D)) * B0_hat(1:$D)
+    E_par  = sum(E * B0_hat(1:$D)) * B0_hat(1:$D)
     E_perp = E - E_par
 
 #if $D == 2
