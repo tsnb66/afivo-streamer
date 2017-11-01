@@ -96,6 +96,8 @@ module m_streamer
   ! Only mark cells for refinement above this electron density
   real(dp), protected :: ST_refine_min_density = -1.0_dp
 
+  real(dp), protected :: ST_max_electric_fld = 3e7_dp
+
   ! Current time step
   real(dp) :: ST_dt
 
@@ -227,7 +229,6 @@ contains
     character(len=ST_slen)     :: td_file = "td_input_file.txt"
     character(len=ST_slen)     :: gas_name         = "AIR"
     integer                    :: table_size(2)    = [10, 500]
-    real(dp)                   :: max_electric_fld = 3e7_dp
     real(dp)                   :: alpha_fac        = 1.0_dp
     real(dp)                   :: eta_fac          = 1.0_dp
     real(dp)                   :: mobility_fac     = 1.0_dp
@@ -243,7 +244,8 @@ contains
 
     call CFG_add_get(cfg, "lookup_table_size", table_size, &
          "The transport data table size in the fluid model")
-    call CFG_add_get(cfg, "lookup_table_max_electric_fld", max_electric_fld, &
+    call CFG_add_get(cfg, "lookup_table_max_electric_fld", &
+         ST_max_electric_fld, &
          "The maximum electric field in the fluid model coefficients")
 
     call CFG_add_get(cfg, "td_alpha_fac", alpha_fac, &
@@ -257,7 +259,7 @@ contains
 
     ! Create a lookup table for the model coefficients
     ST_td_tbl = LT2_create([0.0_dp, 0.0_dp], &
-         [90.0_dp, max_electric_fld], table_size, n_var_td)
+         [90.0_dp, ST_max_electric_fld], table_size, n_var_td)
 
     ! Fill table with data
     data_name = "efield[V/m]_vs_muB[m2/Vs]"

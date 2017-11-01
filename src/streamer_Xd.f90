@@ -18,7 +18,7 @@ program streamer_$Dd
   type(mg$D_t)           :: mg        ! Multigrid option struct
   type(ref_info_t)       :: ref_info
 
-  real(dp) :: B0_hat(3)
+  real(dp) :: B0_hat(3), max_field
 
   integer :: output_cnt = 0 ! Number of output files written
 
@@ -77,9 +77,14 @@ program streamer_$Dd
      ST_dt = 0.9_dp * minval(ST_dt_vec)
 
      if (ST_dt < ST_dt_min) then
-        print *, "ST_dt getting too small, instability?"
-        print *, ST_dt_vec
-        exit
+        print *, "dt_vec: ", ST_dt_vec
+        error stop "ST_dt getting too small, instability?"
+     end if
+
+     call a$D_tree_max_cc(tree, i_electric_fld, max_field)
+     if (max_field > ST_max_electric_fld) then
+        print *, "max_field: ", max_field
+        error stop "Electric field getting too large"
      end if
 
      if (ST_time > ST_end_time) exit
