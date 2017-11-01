@@ -226,7 +226,7 @@ contains
 
     character(len=ST_slen)     :: td_file = "td_input_file.txt"
     character(len=ST_slen)     :: gas_name         = "AIR"
-    integer                    :: table_size       = 1000
+    integer                    :: table_size(2)    = [10, 500]
     real(dp)                   :: max_electric_fld = 3e7_dp
     real(dp)                   :: alpha_fac        = 1.0_dp
     real(dp)                   :: eta_fac          = 1.0_dp
@@ -257,7 +257,7 @@ contains
 
     ! Create a lookup table for the model coefficients
     ST_td_tbl = LT2_create([0.0_dp, 0.0_dp], &
-         [90.0_dp, max_electric_fld], [19, table_size], n_var_td)
+         [90.0_dp, max_electric_fld], table_size, n_var_td)
 
     ! Fill table with data
     data_name = "efield[V/m]_vs_muB[m2/Vs]"
