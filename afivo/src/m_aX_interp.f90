@@ -1,16 +1,41 @@
 #include "cpp_macros_$Dd.h"
-!> This module contains routines related to point-based interpolation, which can
-!> be useful when you want to have output at given points. The interpolation for
-!> meshes is called prolongation, see m_aX_prolong.
+!> This module contains routines related to interpolation, which can interpolate
+!> 'to' the grid and 'from' the grid (useful for e.g. particle simulations). The
+!> interpolation for meshes is called prolongation, see m_aX_prolong.
 module m_a$D_interp
   use m_a$D_types
 
   implicit none
   private
 
-  public :: a$D_interp1
+  public :: a$D_interp0, a$D_interp1
+  public :: a$D_interp0_to_grid
 
 contains
+
+  !> Using zeroth order interpolation to get a value at r in cell
+  function a$D_interp0(tree, rr, ivs, n_var) result(vals)
+    use m_a$D_utils, only: a$D_get_loc
+    type(a$D_t), intent(in) :: tree !< Parent box
+    real(dp), intent(in)    :: rr($D) !< Where to interpolate
+    integer, intent(in)     :: n_var     !< Number of variables
+    integer, intent(in)     :: ivs(n_var)   !< Variables to interpolate
+    real(dp)                :: vals(n_var)
+    type(a$D_loc_t)         :: loc
+    
+    loc = a$D_get_loc(tree, rr)
+
+    if (loc%id == -1) then
+       print *, "a$D_interp0 error, no box at ", rr
+       stop
+    end if
+    
+#if $D == 2
+    vals = tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), ivs)
+#elif $D == 3
+    vals = tree%boxes(loc%id)%cc(loc%ix(1), loc%ix(2), loc%ix(3), ivs)
+#endif    
+  end function a$D_interp0
 
   !> Using linear interpolation to get a value at r
   function a$D_interp1(tree, r, ivs, n_var) result(vals)
@@ -67,5 +92,45 @@ contains
 #endif
      end do
   end function a$D_interp1
+
+  !> Add 'amount' to the grid cell nearest to rr
+  subroutine a$D_interp0_to_grid(tree, rr, iv, amount, to_density)
+    use m_a$D_utils, only: a$D_get_loc
+    type(a$D_t), intent(inout) :: tree
+    integer, intent(in)        :: iv         !< Index of variable
+    real(dp), intent(in)       :: rr($D)     !< Location
+    real(dp), intent(in)       :: amount     !< How much to add
+    logical, intent(in)        :: to_density !< If true, divide by cell volume
+    real(dp)                   :: actual_amount
+    type(a$D_loc_t)            :: loc
+    integer                    :: id, ix($D)
+
+    loc = a$D_get_loc(tree, rr)
+
+    if (loc%id == -1) then
+       print *, "a$D_interp0_to_grid error, no box at ", rr
+       stop
+    end if
+
+    id = loc%id
+    ix = loc%ix
+
+    !> @todo Support cylindrical coordinates
+    if (to_density) then
+       actual_amount = amount / tree%boxes(id)%dr**$D
+    else
+       actual_amount = amount
+    end if
+
+#if $D == 2
+    tree%boxes(id)%cc(ix(1), ix(2), iv) = &
+         tree%boxes(id)%cc(ix(1), ix(2), iv) + &
+         actual_amount
+#elif $D == 3
+    tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) = &
+         tree%boxes(id)%cc(ix(1), ix(2), ix(3), iv) + &
+         actual_amount
+#endif
+  end subroutine a$D_interp0_to_grid
 
 end module m_a$D_interp
