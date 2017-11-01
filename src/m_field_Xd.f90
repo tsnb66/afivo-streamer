@@ -128,7 +128,14 @@ contains
     !$omp end parallel
 
     call field_set_voltage(ST_time)
-    call mg$D_fas_fmg(tree, mg, .false., have_guess)
+
+    if (.not. have_guess) then
+       call mg$D_fas_fmg(tree, mg, .false., have_guess)
+       call mg$D_fas_fmg(tree, mg, .false., .true.)
+    else
+       call mg$D_fas_vcycle(tree, mg, .false.)
+       call mg$D_fas_vcycle(tree, mg, .false.)
+    end if
 
     ! Compute field from potential
     call a$D_loop_box(tree, field_from_potential)
