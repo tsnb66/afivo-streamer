@@ -136,11 +136,13 @@ program streamer_$Dd
         write(fname, "(A,I6.6)") trim(ST_simulation_name) // "_", output_cnt
 #if $D == 2
         call a$D_write_silo(tree, fname, output_cnt, &
-             ST_time, dir=ST_output_dir, add_vars=add_velocity, &
+             ST_time, [i_electron, i_pos_ion, i_electric_fld, i_phi], &
+             dir=ST_output_dir, add_vars=add_velocity, &
              add_names=["v1", "v2"])
 #elif $D == 3
         call a$D_write_silo(tree, fname, output_cnt, &
-             ST_time, dir=ST_output_dir, add_vars=add_velocity, &
+             ST_time, [i_electron, i_pos_ion, i_electric_fld, i_phi], &
+             dir=ST_output_dir, add_vars=add_velocity, &
              add_names=["v1", "v2", "v3"])
 #endif
 
