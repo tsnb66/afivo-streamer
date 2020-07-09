@@ -39,7 +39,7 @@ contains
     real(dp)                   :: voltage
     logical                    :: V0_from_field = .true.
 
-    if (restart) error stop "TODO: Circuit does not support restarting"
+    if (circuit_used .and. restart) error stop "TODO: Circuit does not support restarting"
 
     call CFG_add_get(cfg, "circuit%type", circuit_type, &
          "Type of external circuit")
