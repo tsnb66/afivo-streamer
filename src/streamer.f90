@@ -39,6 +39,7 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
+  real(dp)                  :: t_field_off = huge(dp)
 
   call print_program_name()
 
@@ -49,6 +50,9 @@ program streamer
        "If set, restart simulation from a previous .dat file")
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
+
+  call CFG_add_get(cfg, "t_field_off", t_field_off, &
+       "Time after which the applied field is turned off.")
 
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
@@ -99,6 +103,9 @@ program streamer
 
      ! This routine always needs to be called when using multigrid
      call mg_init(tree, mg)
+
+     ! We want to set the initial seed again
+     call set_initial_conditions_restart(tree, mg)
   else
      time             = 0.0_dp ! Simulation time (all times are in s)
      global_time      = time
@@ -136,6 +143,11 @@ program streamer
 
   do it = 1, huge(1)-1
      if (ST_use_end_time .and. time >= ST_end_time) exit
+
+     ! Turn off the applied field
+     if (time >= t_field_off) then
+        call field_set_voltage_externally(0.0_dp)
+     end if
 
      ! Initialize starting position of streamer
      if (ST_use_end_streamer_length .and. it == ST_initial_streamer_pos_steps_wait) then
@@ -301,7 +313,7 @@ contains
 
        ! This placement is so that users can set epsilon before the coarse grid
        ! solver is constructed
-       if (n == 1) call mg_init(tree, mg)
+       if ((n == 1) .and. (mg%initialized .eqv. .false.)) call mg_init(tree, mg)
 
        call field_compute(tree, mg, 0, time, .false.)
 
@@ -316,6 +328,39 @@ contains
        if (ref_info%n_add == 0) exit
     end do
   end subroutine set_initial_conditions
+
+  subroutine set_initial_conditions_restart(tree, mg)
+   type(af_t), intent(inout) :: tree
+    type(mg_t), intent(inout) :: mg
+    integer                   :: n
+
+    do n = 1, 100
+       call af_loop_box(tree, init_cond_restart_set_box)
+
+       if (associated(user_initial_conditions)) then
+          call af_loop_box(tree, user_initial_conditions)
+       else if (ST_use_dielectric) then
+          error stop "use_dielectric requires user_initial_conditions to be set"
+       end if
+
+       ! This placement is so that users can set epsilon before the coarse grid
+       ! solver is constructed
+       if ((n == 1) .and. (mg%initialized .eqv. .false.)) call mg_init(tree, mg)
+
+       call field_compute(tree, mg, 0, time, .false.)
+
+       if (associated(user_refine)) then
+          call af_adjust_refinement(tree, user_refine, ref_info, &
+               refine_buffer_width)
+       else
+          call af_adjust_refinement(tree, refine_routine, ref_info, &
+               refine_buffer_width)
+       end if
+
+       if (ref_info%n_add == 0) exit
+    end do
+  end subroutine set_initial_conditions_restart
+
 
   subroutine write_sim_data(my_unit)
     integer, intent(in) :: my_unit
