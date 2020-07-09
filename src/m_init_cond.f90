@@ -29,6 +29,7 @@ module m_init_cond
 
   public :: init_cond_initialize
   public :: init_cond_set_box
+  public :: init_cond_restart_set_box
   public :: init_cond_stochastic_density
 
 contains
@@ -266,5 +267,71 @@ contains
     end do; CLOSE_DO
 
   end subroutine init_cond_set_box
+
+  subroutine init_cond_restart_set_box(box)
+   use m_geometry
+   use m_gas
+   use m_user_methods
+   type(box_t), intent(inout) :: box
+   integer                    :: IJK, n, nc
+   real(dp)                   :: rr(NDIM)
+   real(dp)                   :: density
+
+   nc = box%n_cell
+   !box%cc(DTIMES(:), :) = 0.0_dp ! Set initial densities/voltage to zero
+   !box%cc(DTIMES(:), i_electron) = init_conds%background_density
+   !box%cc(DTIMES(:), i_1pos_ion) = init_conds%background_density
+
+   do KJI_DO(0,nc+1)
+      rr = af_r_cc(box, [IJK])
+
+      if (gas_dynamics) then
+         if (associated(user_gas_density)) then
+            box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
+         else
+            ! Start with a constant gas number density
+            box%cc(IJK, i_gas_dens) = gas_number_density
+         end if
+
+         ! Initialize Euler variables: density, momentum, energy
+         box%cc(IJK, gas_vars(i_rho)) = box%cc(IJK, i_gas_dens) * &
+              gas_molecular_weight
+         box%cc(IJK, gas_vars(i_mom)) = 0.0_dp
+         box%cc(IJK, gas_vars(i_e)) = &
+              gas_pressure * 1e5_dp / (gas_euler_gamma - 1) + &
+              0.5_dp * sum(box%cc(IJK, gas_vars(i_mom))**2) / &
+              box%cc(IJK, gas_vars(i_rho))
+      else if (associated(user_gas_density)) then
+         box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
+      end if
+
+      do n = 1, init_conds%n_cond
+         density = GM_density_line(rr, init_conds%seed_r0(:, n), &
+              init_conds%seed_r1(:, n), &
+              init_conds%seed_density(n), init_conds%seed_density2(n), NDIM, &
+              init_conds%seed_width(n), &
+              init_conds%seed_falloff(n))
+
+         if (n == 1 .and. allocated(init_conds%seed1_species)) then
+            box%cc(IJK, init_conds%seed1_species) = &
+                 box%cc(IJK, init_conds%seed1_species) + density
+         else
+            ! Add electrons and/or ions depending on the seed charge type
+            select case (init_conds%seed_charge_type(n))
+            case (-1)
+               box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
+            case (0)
+               box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_1pos_ion) + density
+               box%cc(IJK, i_electron) = box%cc(IJK, i_electron) + density
+            case (1)
+               box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_1pos_ion) + density
+            case default
+               error stop "Invalid seed_charge_type"
+            end select
+         end if
+      end do
+   end do; CLOSE_DO
+  end subroutine init_cond_restart_set_box
+
 
 end module m_init_cond
