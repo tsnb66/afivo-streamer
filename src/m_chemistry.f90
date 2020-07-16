@@ -66,6 +66,73 @@ module m_chemistry
   !> Indicates a reaction of the form c1 * exp(-(Td/c2)**2)
   integer, parameter :: rate_analytic_exp_v2 = 5
 
+  !> Indicates a reaction of the form c1 * exp(-(c2 / Td))
+  integer, parameter :: rate_analytic_exp_v3 = 6
+
+  !> Indicates a reaction of the form c1 * Tgas * exp(-(c2 / Tgas))
+  integer, parameter :: rate_analytic_exp_v4 = 7
+  
+  !> Indicates a reaction of the form c1 * Td**0.8 / exp(c2 * (c3 - log(Td))**3)
+  integer, parameter :: rate_analytic_diss2 = 8
+  
+  !> Indicates a reaction of the form c1 * (300 / Te)
+  integer, parameter :: rate_analytic_electemp = 9
+
+  !> Indicates a reaction of the form c1 * exp(c2 * (Te - T) / (Te * T)) / ((Te / 300) * exp(c3 / T))
+  integer, parameter :: rate_analytic_att3_O2 = 10
+  
+  !> Indicates a reaction of the form c1 * exp(c2 * (Te - T) / (Te * T)) / ((Te / 300)**2 * exp(c3 / T))
+  integer, parameter :: rate_analytic_att3_N2 = 11
+
+  !> Indicates a reaction of the form c1 * Td**2 / (c2**2 + Td**2)
+  integer, parameter :: rate_analytic_det1 = 12
+  
+  !> Indicates a reaction of the form:
+  !> c1 * exp(-c2 / TeffR23) * (1 - exp(-c2 * (1 / T - 1 / TeffR23))) / (1 - exp(-c3 * (1 / T - 1 / TeffR23)))
+  integer, parameter :: rate_analytic_R23 = 13
+
+  !> Indicates a reaction of the form: c1 * exp(-c2 / T)
+  integer, parameter :: rate_analytic_exp_v5 = 14
+
+  !> Indicates a reaction of the form: c1 * T**0.5
+  integer, parameter :: rate_analytic_gastemp = 15
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / TeffR70)**3.2
+  integer, parameter :: rate_analytic_R70 = 16
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / TeffR72)**2
+  integer, parameter :: rate_analytic_R72 = 17
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / TeffR73)**2.5 * exp(-c2 / TeffR73)
+  integer, parameter :: rate_analytic_R73 = 18
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / TeffR74)**5.3 * exp(-c2 / TeffR74)
+  integer, parameter :: rate_analytic_R74 = 19
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / TeffR75)**4 * exp(-c2 / TeffR75)
+  integer, parameter :: rate_analytic_R75 = 20
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / TeffR83)
+  integer, parameter :: rate_analytic_R83 = 21
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / Tion)**0.5
+  integer, parameter :: rate_analytic_Tion = 22
+
+  !> Indicates a reaction of the form:
+  !> c1 * (300 / Tion)**2.5
+  integer, parameter :: rate_analytic_rec3 = 23
+
+  !> Indicates a reaction of the form:
+  !> exp(-c1 - (c2 / Td))
+  integer, parameter :: rate_analytic_diss3 = 24
+
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
 
@@ -373,11 +440,20 @@ contains
 
   !> Compute reaction rates
   subroutine get_rates(fields, rates, n_cells)
+    use m_gas
+    use m_units_constants
     integer, intent(in)   :: n_cells                     !< Number of cells
     real(dp), intent(in)  :: fields(n_cells)             !< The field (in Td) in the cells
     real(dp), intent(out) :: rates(n_cells, n_reactions) !< The reaction rates
     integer               :: n
     real(dp)              :: c0, c(rate_max_num_coeff)
+    real(dp)              :: Telectron(n_cells), Tion(n_cells), Teff(n_cells)
+    
+    !> Analytical approximation of the electron temperature: doi:10.1002/2013JD020618
+    Telectron = gas_temperature + 3648.6 * fields**0.46
+    
+    !> Analytical approximation of the ion temperature: doi:10.1002/2013JD020618
+    Tion = gas_temperature + 0.13 * fields**2
 
     do n = 1, n_reactions
        ! A factor that the reaction rate is multiplied with, for example to
@@ -399,7 +475,64 @@ contains
           rates(:, n) = c0 * c(1) * exp(-(c(2) / (c(3) + fields))**2)
        case (rate_analytic_exp_v2)
           rates(:, n) = c0 * c(1) * exp(-(fields/c(2))**2)
-       end select
+       case (rate_analytic_exp_v3)
+          rates(:, n) = c(1) * exp(-(c(2) / fields))
+       case (rate_analytic_exp_v4)
+          rates(:, n) = c(1) * gas_temperature * exp(-(c(2) / gas_temperature))
+       case (rate_analytic_diss2)
+          rates(:, n) = c(1) * fields**0.8 / exp(c(2) * (c(3) - log(fields))**3)
+       case (rate_analytic_electemp)
+          rates(:, n) = c(1) * 300 / Telectron
+       case (rate_analytic_att3_O2)
+          rates(:, n) = c(1) * exp(c(2) * (Telectron - gas_temperature) / (Telectron * gas_temperature)) &
+                              / ((Telectron / 300) * exp(c(3) / gas_temperature))
+      case (rate_analytic_att3_N2)
+          rates(:, n) = c(1) * exp(c(2) * (Telectron - gas_temperature) / (Telectron * gas_temperature)) &
+                              / ((Telectron / 300)**2 * exp(c(3) / gas_temperature))
+      case (rate_analytic_det1)
+          rates(:, n) = c(1)**2 * fields**2 / (c(2)**2 + fields**2)
+      case (rate_analytic_R23)
+          ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+          Teff = (UC_O2_mass * gas_temperature + UC_O2_mass * Tion) / (UC_O2_mass + UC_O2_mass)
+          rates(:, n) = c(1) * exp(-c(2) / Teff) * (1 - exp(-c(2) * ((1 / gas_temperature) - (1 / Teff)))) &
+                                                 / (1 - exp(-c(3) * ((1 / gas_temperature) - (1 / Teff))))
+      case (rate_analytic_exp_v5)
+          rates(:, n) = c(1) * exp(-c(2) / gas_temperature)
+      case (rate_analytic_gastemp)
+          rates(:, n) = c(1) * gas_temperature**0.5
+      case (rate_analytic_R70)
+         ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+         Teff = (UC_O2_mass * gas_temperature + UC_O2_mass * Tion) / (UC_O2_mass + UC_O2_mass)
+         rates(:, n) = c(1) * (300 / Teff)**3.2
+      case (rate_analytic_R72)
+         ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+         Teff = (UC_O2_mass * gas_temperature + UC_N2_mass * Tion) / (UC_O2_mass + UC_N2_mass)
+         rates(:, n) = c(1) * (300 / Teff)**2
+      case (rate_analytic_R73)
+         ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+         Teff = (UC_N2_mass * gas_temperature + 2 * UC_O2_mass * Tion) / (2 * UC_O2_mass + UC_N2_mass)
+         rates(:, n) = c(1) * (300 / Teff)**2.5 * exp(-c(2) / Teff)
+      case (rate_analytic_R74)
+         ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+         Teff = (UC_N2_mass * gas_temperature + (UC_O2_mass + UC_N2_mass) * Tion) / (UC_O2_mass + 2 * UC_N2_mass)
+         rates(:, n) = c(1) * (300 / Teff)**5.3 * exp(-c(2) / Teff)
+      case (rate_analytic_R75)
+         ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+         Teff = (UC_O2_mass * gas_temperature + 2 * UC_O2_mass * Tion) / (3 * UC_O2_mass)
+         rates(:, n) = c(1) * (300 / Teff)**4 * exp(-c(2) / Teff)
+      case (rate_analytic_R83)
+         ! Effective ion temperature approximation: doi:10.1002/2013JD020618
+         Teff = (UC_O2_mass * gas_temperature + 0.5 * UC_O2_mass * Tion) / (UC_O2_mass + 0.5 * UC_O2_mass)
+         rates(:, n) = c(1) * (300 / Teff)
+      case (rate_analytic_Tion)
+         rates(:, n) = c(1) * (300 / Tion)**0.5
+      case (rate_analytic_rec3)
+         rates(:, n) = c(1) * (300 / Tion)**2.5
+      case (rate_analytic_diss3)
+         ! Kossyi 1992 k13. Note that E / n units are 10**-16 V cm**2 in Kossyi
+         ! This is the reason for the factor 10.
+         rates(:, n) = exp(-c(1) - (10 * c(2) / fields))
+      end select
     end do
   end subroutine get_rates
 
@@ -520,6 +653,63 @@ contains
        case ("exp_v2")
           new_reaction%rate_type = rate_analytic_exp_v2
           read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("exp_v3")
+         new_reaction%rate_type = rate_analytic_exp_v3
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("exp_v4")
+         new_reaction%rate_type = rate_analytic_exp_v4
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("diss2")
+         new_reaction%rate_type = rate_analytic_diss2
+         read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("elecT")
+         new_reaction%rate_type = rate_analytic_electemp
+         read(data_value(n), *) new_reaction%rate_data(1)
+       case ("att3_O2")
+         new_reaction%rate_type = rate_analytic_att3_O2
+         read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("att3_N2")
+         new_reaction%rate_type = rate_analytic_att3_N2
+         read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("det1")
+         new_reaction%rate_type = rate_analytic_det1
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("R23")
+         new_reaction%rate_type = rate_analytic_R23
+         read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("exp_v5")
+         new_reaction%rate_type = rate_analytic_exp_v5
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+       case ("gasT")
+         new_reaction%rate_type = rate_analytic_gastemp
+         read(data_value(n), *) new_reaction%rate_data(1)
+      case ("R70")
+         new_reaction%rate_type = rate_analytic_R70
+         read(data_value(n), *) new_reaction%rate_data(1)
+      case ("R72")
+         new_reaction%rate_type = rate_analytic_R72
+         read(data_value(n), *) new_reaction%rate_data(1)
+      case ("R73")
+         new_reaction%rate_type = rate_analytic_R73
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+      case ("R74")
+         new_reaction%rate_type = rate_analytic_R74
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+      case ("R75")
+         new_reaction%rate_type = rate_analytic_R75
+         read(data_value(n), *) new_reaction%rate_data(1:2)
+      case ("R83")
+         new_reaction%rate_type = rate_analytic_R83
+         read(data_value(n), *) new_reaction%rate_data(1)
+      case ("Tion")
+         new_reaction%rate_type = rate_analytic_Tion
+         read(data_value(n), *) new_reaction%rate_data(1)
+      case ("rec3")
+         new_reaction%rate_type = rate_analytic_rec3
+         read(data_value(n), *) new_reaction%rate_data(1)
+      case ("diss3")
+         new_reaction%rate_type = rate_analytic_diss3
+         read(data_value(n), *) new_reaction%rate_data(1:2)
        case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
