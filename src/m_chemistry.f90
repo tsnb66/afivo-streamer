@@ -123,7 +123,7 @@ module m_chemistry
 
   !> Indicates a reaction of the form:
   !> c1 * (300 / Tion)**0.5
-  integer, parameter :: rate_analytic_Tion = 22
+  integer, parameter :: rate_analytic_ionT = 22
 
   !> Indicates a reaction of the form:
   !> c1 * (300 / Tion)**2.5
@@ -524,7 +524,7 @@ contains
          ! Effective ion temperature approximation: doi:10.1002/2013JD020618
          Teff = (UC_O2_mass * gas_temperature + 0.5 * UC_O2_mass * Tion) / (UC_O2_mass + 0.5 * UC_O2_mass)
          rates(:, n) = c(1) * (300 / Teff)
-      case (rate_analytic_Tion)
+      case (rate_analytic_ionT)
          rates(:, n) = c(1) * (300 / Tion)**0.5
       case (rate_analytic_rec3)
          rates(:, n) = c(1) * (300 / Tion)**2.5
@@ -633,89 +633,89 @@ contains
 
     ! Now parse the reactions
     do n = 1, n_reactions
-       call parse_reaction(trim(reaction(n)), new_reaction)
-       new_reaction%description = trim(reaction(n))
+      call parse_reaction(trim(reaction(n)), new_reaction)
+      new_reaction%description = trim(reaction(n))
 
-       select case (how_to_get(n))
-       case ("field_table")
-          ! Reaction data should be present in the same file
-          call read_reaction_table(filename, &
+      select case (how_to_get(n))
+         case ("field_table")
+            ! Reaction data should be present in the same file
+            call read_reaction_table(filename, &
                trim(data_value(n)), new_reaction)
-       case ("constant")
-          new_reaction%rate_type = rate_analytic_constant
-          read(data_value(n), *) new_reaction%rate_data(1)
-       case ("linear")
-          new_reaction%rate_type = rate_analytic_linear
-          read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("exp_v1")
-          new_reaction%rate_type = rate_analytic_exp_v1
-          read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("exp_v2")
-          new_reaction%rate_type = rate_analytic_exp_v2
-          read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("exp_v3")
-         new_reaction%rate_type = rate_analytic_exp_v3
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("exp_v4")
-         new_reaction%rate_type = rate_analytic_exp_v4
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("diss2")
-         new_reaction%rate_type = rate_analytic_diss2
-         read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("elecT")
-         new_reaction%rate_type = rate_analytic_electemp
-         read(data_value(n), *) new_reaction%rate_data(1)
-       case ("att3_O2")
-         new_reaction%rate_type = rate_analytic_att3_O2
-         read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("att3_N2")
-         new_reaction%rate_type = rate_analytic_att3_N2
-         read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("det1")
-         new_reaction%rate_type = rate_analytic_det1
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("R23")
-         new_reaction%rate_type = rate_analytic_R23
-         read(data_value(n), *) new_reaction%rate_data(1:3)
-       case ("exp_v5")
-         new_reaction%rate_type = rate_analytic_exp_v5
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-       case ("gasT")
-         new_reaction%rate_type = rate_analytic_gastemp
-         read(data_value(n), *) new_reaction%rate_data(1)
-      case ("R70")
-         new_reaction%rate_type = rate_analytic_R70
-         read(data_value(n), *) new_reaction%rate_data(1)
-      case ("R72")
-         new_reaction%rate_type = rate_analytic_R72
-         read(data_value(n), *) new_reaction%rate_data(1)
-      case ("R73")
-         new_reaction%rate_type = rate_analytic_R73
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-      case ("R74")
-         new_reaction%rate_type = rate_analytic_R74
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-      case ("R75")
-         new_reaction%rate_type = rate_analytic_R75
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-      case ("R83")
-         new_reaction%rate_type = rate_analytic_R83
-         read(data_value(n), *) new_reaction%rate_data(1)
-      case ("Tion")
-         new_reaction%rate_type = rate_analytic_Tion
-         read(data_value(n), *) new_reaction%rate_data(1)
-      case ("rec3")
-         new_reaction%rate_type = rate_analytic_rec3
-         read(data_value(n), *) new_reaction%rate_data(1)
-      case ("diss3")
-         new_reaction%rate_type = rate_analytic_diss3
-         read(data_value(n), *) new_reaction%rate_data(1:2)
-       case default
-          print *, "Unknown rate type: ", trim(how_to_get(n))
-          print *, "For reaction:      ", trim(reaction(n))
-          print *, "In file:           ", trim(filename)
-          error stop
-       end select
+         case ("constant")
+            new_reaction%rate_type = rate_analytic_constant
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("linear")
+            new_reaction%rate_type = rate_analytic_linear
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("exp_v1")
+            new_reaction%rate_type = rate_analytic_exp_v1
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("exp_v2")
+            new_reaction%rate_type = rate_analytic_exp_v2
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("exp_v3")
+            new_reaction%rate_type = rate_analytic_exp_v3
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("exp_v4")
+            new_reaction%rate_type = rate_analytic_exp_v4
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("diss2")
+            new_reaction%rate_type = rate_analytic_diss2
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("elecT")
+            new_reaction%rate_type = rate_analytic_electemp
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("att3_O2")
+            new_reaction%rate_type = rate_analytic_att3_O2
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("att3_N2")
+            new_reaction%rate_type = rate_analytic_att3_N2
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("det1")
+            new_reaction%rate_type = rate_analytic_det1
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("R23")
+            new_reaction%rate_type = rate_analytic_R23
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("exp_v5")
+            new_reaction%rate_type = rate_analytic_exp_v5
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("gasT")
+            new_reaction%rate_type = rate_analytic_gastemp
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("R70")
+            new_reaction%rate_type = rate_analytic_R70
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("R72")
+            new_reaction%rate_type = rate_analytic_R72
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("R73")
+            new_reaction%rate_type = rate_analytic_R73
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("R74")
+            new_reaction%rate_type = rate_analytic_R74
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("R75")
+            new_reaction%rate_type = rate_analytic_R75
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case ("R83")
+            new_reaction%rate_type = rate_analytic_R83
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("ionT")
+            new_reaction%rate_type = rate_analytic_ionT
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("rec3")
+            new_reaction%rate_type = rate_analytic_rec3
+            read(data_value(n), *) new_reaction%rate_data(1)
+         case ("diss3")
+            new_reaction%rate_type = rate_analytic_diss3
+            read(data_value(n), *) new_reaction%rate_data(1:2)
+         case default
+            print *, "Unknown rate type: ", trim(how_to_get(n))
+            print *, "For reaction:      ", trim(reaction(n))
+            print *, "In file:           ", trim(filename)
+            error stop
+      end select
 
        reactions(n) = new_reaction
     end do
