@@ -531,7 +531,7 @@ contains
       case (rate_analytic_diss3)
          ! Kossyi 1992 k13. Note that E / n units are 10**-16 V cm**2 in Kossyi
          ! This is the reason for the factor 10.
-         rates(:, n) = exp(-c(1) - (10 * c(2) / fields))
+         rates(:, n) = c(1) * exp(-c(2) - (10 * c(3) / fields))
       end select
     end do
   end subroutine get_rates
@@ -709,7 +709,7 @@ contains
             read(data_value(n), *) new_reaction%rate_data(1)
          case ("diss3")
             new_reaction%rate_type = rate_analytic_diss3
-            read(data_value(n), *) new_reaction%rate_data(1:2)
+            read(data_value(n), *) new_reaction%rate_data(1:3)
          case default
             print *, "Unknown rate type: ", trim(how_to_get(n))
             print *, "For reaction:      ", trim(reaction(n))
