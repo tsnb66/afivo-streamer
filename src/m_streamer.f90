@@ -33,8 +33,11 @@ module m_streamer
   integer, public, protected :: i_tmp          = -1
   !> Index of can be set to include a dielectric
   integer, public, protected :: i_eps          = -1
-  !> Index of Joule heating term
-  integer, public, protected :: i_heat_src     = -1
+
+  !> Include deposited power density in output
+  logical, public, protected :: compute_power_density = .false.
+  !> Index of deposited power density
+  integer, public, protected :: i_power_density = -1
 
   !> Number of face-centered variables
   integer, public, protected :: n_var_face   = 0
@@ -191,8 +194,11 @@ contains
             af_gc_prolong_copy, af_prolong_zeroth)
     end if
 
-    if (gas_dynamics) then
-       call af_add_cc_variable(tree, "heat_src", ix=i_heat_src)
+    call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
+         "Whether to compute the deposited power density")
+
+    if (compute_power_density) then
+       call af_add_cc_variable(tree, "power_density", ix = i_power_density)
     end if
 
     call CFG_add_get(cfg, "use_end_time", ST_use_end_time, &
@@ -201,11 +207,13 @@ contains
          "Whether the length of the streamer is used to end the simulation")
     call CFG_add_get(cfg, "end_streamer_length", ST_end_streamer_length, &
          "Streamer length at which the simulation will end.")
-    call CFG_add_get(cfg, "initial_streamer_pos_steps_wait", ST_initial_streamer_pos_steps_wait, &
-          "Number of simulation steps to wait before initializing the starting position of the streamer")
+    call CFG_add_get(cfg, "initial_streamer_pos_steps_wait", &
+         ST_initial_streamer_pos_steps_wait, &
+         "Number of simulation steps to wait before initializing "&
+         "the starting position of the streamer")
 
     call CFG_add_get(cfg, "end_time", ST_end_time, &
-       "The desired endtime (s) of the simulation")
+         "The desired endtime (s) of the simulation")
     call CFG_add_get(cfg, "box_size", ST_box_size, &
          "The number of grid cells per coordinate in a box")
     call CFG_add_get(cfg, "coarse_grid_size", ST_coarse_grid_size, &
