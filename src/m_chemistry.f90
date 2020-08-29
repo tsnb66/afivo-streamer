@@ -25,7 +25,7 @@ module m_chemistry
        "detachment", "general"]
 
   !> Maximum number of coefficients for a reaction rate function
-  integer, parameter :: rate_max_num_coeff = 4
+  integer, parameter :: rate_max_num_coeff = 20
 
   !> Basic chemical reaction type
   type reaction_t
@@ -133,6 +133,32 @@ module m_chemistry
   !> exp(-c1 - (c2 / Td))
   integer, parameter :: rate_analytic_diss3 = 24
 
+  !> Indicates a reaction of the form:
+  !> c1 * [1 - exp(-c2 / T)] * exp(-c3 / T)
+  integer, parameter :: rate_analytic_neutral_diss1 = 25
+
+  !> Indicates a reaction of the form:
+  !> c1 * T^c2 * exp(-c3 / T)
+  integer, parameter :: rate_analytic_gasT2 = 26
+
+  !> Indicates a reaction of the form:
+  !> c1 * (T + c(2) * Td**2)**c3
+  integer, parameter :: rate_analytic_rec4 = 27
+
+  !> Indicates a reaction of the form:
+  !> c1 * T^c2 * exp(-c3 / T) * (T / Te)^c4 * B1(c5:c9) / B2(c10:c14)
+  !> B = c1 * T^c2 * [1 - exp(-c3 / T)]^c4 * exp(-c5 / T)
+  integer, parameter :: rate_analytic_exp_v6 = 28
+
+  !> Indicates a reaction of the form:
+  !> c1 * Te^-1 * exp(-c2 / T) * exp(c3 * (Te - T) * T / Te)
+  integer, parameter :: rate_analytic_att4 = 29
+  
+  !> Indicates a reaction of the form:
+  !> c1 * exp(-c2 / Tef2) * (1 - exp(-4*theta)) / (1 - exp(-theta))
+  !> theta = c3 * (T^-1 - Tef2^-1)
+  !> Tef2 = T + c4 * Td^2
+   integer, parameter :: rate_analytic_det2 = 30
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
 
@@ -448,9 +474,9 @@ contains
     integer               :: n
     real(dp)              :: c0, c(rate_max_num_coeff)
     real(dp)              :: Telectron(n_cells), Tion(n_cells), Teff(n_cells)
+    real(dp)              :: B1(n_cells), B2(n_cells)
+    integer               :: cell_idx
     
-    !> Analytical approximation of the electron temperature: doi:10.1002/2013JD020618
-    Telectron = gas_temperature + 3648.6 * fields**0.46
     
     !> Analytical approximation of the ion temperature: doi:10.1002/2013JD020618
     Tion = gas_temperature + 0.13 * fields**2
@@ -484,9 +510,13 @@ contains
        case (rate_analytic_electemp)
           rates(:, n) = c(1) * 300 / Telectron
        case (rate_analytic_att3_O2)
+         !> Analytical approximation of the electron temperature: doi:10.1002/2013JD020618
+         Telectron = gas_temperature + 3648.6 * fields**0.46
           rates(:, n) = c(1) * exp(c(2) * (Telectron - gas_temperature) / (Telectron * gas_temperature)) &
                               / ((Telectron / 300) * exp(c(3) / gas_temperature))
       case (rate_analytic_att3_N2)
+         !> Analytical approximation of the electron temperature: doi:10.1002/2013JD020618
+         Telectron = gas_temperature + 3648.6 * fields**0.46
           rates(:, n) = c(1) * exp(c(2) * (Telectron - gas_temperature) / (Telectron * gas_temperature)) &
                               / ((Telectron / 300)**2 * exp(c(3) / gas_temperature))
       case (rate_analytic_det1)
@@ -532,6 +562,51 @@ contains
          ! Kossyi 1992 k13. Note that E / n units are 10**-16 V cm**2 in Kossyi
          ! This is the reason for the factor 10.
          rates(:, n) = c(1) * exp(-c(2) - (10 * c(3) / fields))
+      case (rate_analytic_neutral_diss1)
+         rates(:, n) = c(1) * (1 - exp(-c(2) / gas_temperature)) * exp(-c(3) / gas_temperature)
+      case (rate_analytic_gasT2)
+         rates(:, n) = c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature)
+      case (rate_analytic_rec4)
+         rates(:, n) = c(1) * (gas_temperature + c(2) * fields**2)**c(3)
+      case (rate_analytic_exp_v6)
+         
+         ! Electron temperature approximation: DOI: 10.1088/0022-3727/36/15/314
+         do cell_idx = 1, n_cells
+            if (fields(cell_idx) <= 50) then
+               Telectron(cell_idx) = 0.447 * fields(cell_idx)**0.16
+            else
+               Telectron(cell_idx) = 0.0167 * fields(cell_idx)
+            end if
+         end do
+
+         B1(:) = c(5) * gas_temperature**c(6) * (1 - exp(-c(7) / gas_temperature))**c(8) * exp(-c(9) / gas_temperature)
+         B2(:) = c(10) * gas_temperature**c(11) * (1 - exp(-c(12) / gas_temperature))**c(13) * exp(-c(14) / gas_temperature)
+
+         rates(:, n) = c(1) * gas_temperature**c(2) * exp(-c(3) / gas_temperature) * (gas_temperature / Telectron)**c(4) * B1 / B2
+      case (rate_analytic_att4)
+         
+         ! Electron temperature approximation: DOI: 10.1088/0022-3727/36/15/314
+         do cell_idx = 1, n_cells
+            if (fields(cell_idx) <= 50) then
+               Telectron(cell_idx) = 0.447 * fields(cell_idx)**0.16
+            else
+               Telectron(cell_idx) = 0.0167 * fields(cell_idx)
+            end if
+         end do
+
+         rates(:, n) = c(1) * Telectron**(-1) * exp(-c(2) / gas_temperature) * exp(c(3) * &
+                       (Telectron - gas_temperature) * gas_temperature / Telectron)
+      case (rate_analytic_det2)
+         
+         ! This is not electron temperature !!
+         ! This is Tef2 from: DOI: 10.1088/0022-3727/36/15/314
+         Telectron = gas_temperature + c(4) * fields**2
+         
+         ! This is not ion temperature !!
+         ! This is theta from: DOI: 10.1088/0022-3727/36/15/314
+         Tion = c(3) * (gas_temperature**(-1) - Telectron**(-1))
+
+         rates(:, n) = c(1) * exp(-c(2) / Telectron) * (1 - exp(-4 * Tion)) / (1 - exp(-Tion))
       end select
     end do
   end subroutine get_rates
@@ -573,7 +648,7 @@ contains
     character(len=*), intent(in) :: filename
     logical, intent(out)         :: read_success
     character(len=string_len)    :: line
-    character(len=50)            :: data_value(max_num_reactions)
+    character(len=100)            :: data_value(max_num_reactions)
     character(len=50)            :: reaction(max_num_reactions)
     character(len=50)            :: how_to_get(max_num_reactions)
     type(reaction_t)             :: new_reaction
@@ -710,6 +785,24 @@ contains
          case ("diss3")
             new_reaction%rate_type = rate_analytic_diss3
             read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("neutraldiss1")
+            new_reaction%rate_type = rate_analytic_neutral_diss1
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("gasT2")
+            new_reaction%rate_type = rate_analytic_gasT2
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("rec4")
+            new_reaction%rate_type = rate_analytic_rec4
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("exp_v6")
+            new_reaction%rate_type = rate_analytic_exp_v6
+            read(data_value(n), *) new_reaction%rate_data(1:14)
+         case ("att4")
+            new_reaction%rate_type = rate_analytic_att4
+            read(data_value(n), *) new_reaction%rate_data(1:3)
+         case ("det2")
+            new_reaction%rate_type = rate_analytic_det2
+            read(data_value(n), *) new_reaction%rate_data(1:4)
          case default
             print *, "Unknown rate type: ", trim(how_to_get(n))
             print *, "For reaction:      ", trim(reaction(n))
