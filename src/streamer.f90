@@ -39,7 +39,7 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
-  real(dp)                  :: t_field_off = huge(dp)
+  real(dp)                  :: t_field_off = -1
 
   call print_program_name()
 
@@ -145,7 +145,7 @@ program streamer
      if (ST_use_end_time .and. time >= ST_end_time) exit
 
      ! Turn off the applied field
-     if (time >= t_field_off) then
+     if (t_field_off >= 0 .and. time >= t_field_off) then
         call field_set_voltage_externally(0.0_dp)
      end if
 
