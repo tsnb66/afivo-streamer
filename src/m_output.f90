@@ -227,7 +227,7 @@ contains
     end if
 
     if (datfile_write .and. &
-         modulo(output_cnt, datfile_per_outputs) == 0) then
+         modulo(output_cnt, datfile_per_outputs) == 0 .and. datfile_per_outputs >= 0) then
        call af_write_tree(tree, fname, write_sim_data)
     end if
 
