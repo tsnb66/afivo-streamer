@@ -241,7 +241,10 @@ contains
     logical, intent(in)       :: have_guess
     integer                   :: i
     real(dp)                  :: max_rhs, residual_threshold, conv_fac
+    real(dp)                  :: residual_ratio
     integer, parameter        :: max_initial_iterations = 30
+    real(dp), parameter       :: max_residual = 1e8_dp
+    real(dp), parameter       :: min_residual = 1e-6_dp
     real(dp)                  :: residuals(max_initial_iterations)
 
     call field_set_rhs(tree, s_in)
@@ -249,6 +252,7 @@ contains
 
     call af_tree_maxabs_cc(tree, mg%i_rhs, max_rhs)
 
+    ! With an electrode, the initial convergence testing should be less strict
     if (ST_use_electrode) then
        conv_fac = 1e-8_dp
     else
@@ -257,7 +261,9 @@ contains
 
     ! Set threshold based on rhs and on estimate of round-off error, given by
     ! delta phi / dx^2 = (phi/L * dx)/dx^2
-    residual_threshold = max(max_rhs * ST_multigrid_max_rel_residual, &
+    ! Note that we use min_residual in case max_rhs and field_voltage are zero
+    residual_threshold = max(min_residual, &
+         max_rhs * ST_multigrid_max_rel_residual, &
          conv_fac * abs(field_voltage)/(ST_domain_len(NDIM) * af_min_dr(tree)))
 
     if (ST_use_electrode) then
@@ -273,7 +279,16 @@ contains
        do i = 1, max_initial_iterations
           call mg_fas_fmg(tree, mg, .true., i > 1)
           call af_tree_maxabs_cc(tree, mg%i_tmp, residuals(i))
-          if (residuals(i) < residual_threshold) exit
+
+          if (residuals(i) < residual_threshold) then
+             exit
+          else if (i > 3) then
+             ! Check if the residual is not changing much anymore, and if it is
+             ! small enough, in which case we assume convergence
+             residual_ratio = minval(residuals(i-3:i)) / maxval(residuals(i-3:i))
+             if (residual_ratio < 2.0_dp .and. residual_ratio > 0.5_dp &
+                  .and. residuals(i) < max_residual) exit
+          end if
        end do
 
        ! Check for convergence
