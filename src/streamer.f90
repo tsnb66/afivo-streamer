@@ -40,6 +40,7 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp)                  :: t_field_off = -1
+  character(len=string_len) :: electron_bc = "standard"
 
   call print_program_name()
 
@@ -53,6 +54,9 @@ program streamer
 
   call CFG_add_get(cfg, "t_field_off", t_field_off, &
        "Time after which the applied field is turned off.")
+  call CFG_add_get(cfg, "electron_bc", electron_bc, &
+       "BC used for electron: standard (means using bc_species variable), dirichlet_custom, &
+        neuman_custom.")
 
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
@@ -60,9 +64,33 @@ program streamer
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
-     call af_set_cc_methods(tree, species_itree(i), &
-          bc_species, af_gc_interp_lim, ST_prolongation_method)
+      if (i /= ix_electron) then
+         call af_set_cc_methods(tree, species_itree(i), &
+               bc_species, af_gc_interp_lim, ST_prolongation_method)
+      end if
   end do
+
+  if (electron_bc == "standard") then
+      print *, "Using standard electron_BC"
+      call af_set_cc_methods(tree, ix_electron, &
+               bc_species, af_gc_interp_lim, ST_prolongation_method)
+  else if (electron_bc == "dirichlet_custom") then
+      print *, "Using custom dirichlet 0 electron_BC"
+      call af_set_cc_methods(tree, ix_electron, &
+               rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=dirichlet_custom)
+  else if (electron_bc == "neuman_custom") then
+      print *, "Using custom neuman 0 electron_BC"
+      call af_set_cc_methods(tree, ix_electron, &
+               rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=neuman_custom)
+  else if (electron_bc == "robin_custom") then
+      print *, "Using custom robin electron_BC"
+      call af_set_cc_methods(tree, ix_electron, &
+               rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=robin_custom)
+  else if (electron_bc == "outflow") then
+      print *, "Using custom outflow electron_BC"
+      call af_set_cc_methods(tree, ix_electron, &
+               rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=outflow_custom)
+  end if
 
   if (.not. gas_constant_density) then
      call af_set_cc_methods(tree, i_gas_dens, &
@@ -409,5 +437,467 @@ contains
     print *, " /_/    \_\_| |_| \_/ \___/     |_____/ \__|_|  \___|\__,_|_| |_| |_|\___|_|   "
     print *, "                                                                               "
   end subroutine print_program_name
+
+
+   !> With this method we can set ghost cells manually
+  subroutine custom_boundary_method(box, nb, iv, n_gc, cc)
+   type(box_t), intent(inout) :: box     !< Box that needs b.c.
+   integer, intent(in)     :: nb      !< Direction
+   integer, intent(in)     :: iv      !< Index of variable
+   integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+   !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+   real(dp), intent(inout), optional :: &
+        cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+
+   integer :: lo(NDIM), hi(NDIM)
+   integer :: lo_inside(NDIM), hi_inside(NDIM)
+   integer :: nc
+
+   nc = box%n_cell
+
+#if NDIM == 2
+
+
+   if (n_gc >= 3) error stop "not implemented"
+
+
+   !if (iv == ix_electron) then
+      if (n_gc == 2) then
+         ! #define DTIMES(TXT) TXT, TXT
+         !call af_get_index_bc_outside(nb, box%n_cell, 2, lo, hi)
+         !print *, "2 ghost cells: ", iv, nb, iv, n_gc, lo, hi
+         !cc(DSLICE(lo, hi)) = 200e3
+         select case (nb)
+            case (af_neighb_lowx)
+               cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+               cc(-1, 1:nc) = 0
+            case (af_neighb_highx)
+               cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+               cc(nc + 2, 1:nc) = 0
+            case (af_neighb_lowy)
+               cc(1:nc, 0) = box%cc(1:nc, 1, iv)
+               cc(1:nc, -1) = 0
+            case (af_neighb_highy)
+               cc(1:nc, nc + 1) = box%cc(1:nc, nc, iv)
+               cc(1:nc, nc + 2) = 0
+         end select
+      else if (n_gc == 1) then
+
+         ! Get ghost cell index range
+         !call af_get_index_bc_outside(nb, box%n_cell, 1, lo, hi)
+         !call af_get_index_bc_inside(nb, box%n_cell, 1, lo_inside, hi_inside)
+         select case (nb)
+            case (af_neighb_lowx)
+               !print *, "af_neigb_lowx: ", nb
+               box%cc(0, 1:nc, iv)    = box%cc(1, 1:nc, iv)
+               !box%cc(DSLICE(lo,hi), iv) = box%cc(DSLICE(lo_inside,hi_inside), iv)
+               !box%cc(DSLICE(lo_inside,hi_inside), iv) = -4
+            case (af_neighb_highx)
+               !print *, "af_neigb_highx: ", nb
+               box%cc(nc+1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+               !box%cc(DSLICE(lo,hi), iv) = box%cc(DSLICE(lo_inside,hi_inside), iv)
+               !box%cc(DSLICE(lo_inside,hi_inside), iv) = -5
+            case (af_neighb_lowy)
+               !print *, "af_neigb_lowy: ", nb
+               box%cc(1:nc, 0, iv)    = box%cc(1:nc, 1, iv)
+               !box%cc(DSLICE(lo,hi), iv) = -1 * box%cc(DSLICE(lo_inside,hi_inside), iv)
+               !box%cc(DSLICE(lo_inside,hi_inside), iv) = -6
+            case (af_neighb_highy)
+               !print *, "af_neigb_highy: ", nb
+               !print *, "1 ghost cell: ", lo, hi
+               !print *, it, box%cc(DSLICE(lo,hi), iv)
+               !print *, it, box%cc(DSLICE(lo_inside,hi_inside), iv)
+               box%cc(1:nc, nc+1, iv) = box%cc(1:nc, nc, iv)
+
+               !box%cc(DSLICE(lo,hi), iv) = -1 * box%cc(DSLICE(lo_inside,hi_inside), iv)
+               !box%cc(DSLICE(lo_inside,hi_inside), iv) = -7
+         end select
+
+         ! Set all ghost cells to a scalar value
+         ! #define DSLICE(lo,hi) lo(1):hi(1), lo(2):hi(2)
+      end if
+   !end if
+#endif
+  end subroutine custom_boundary_method
+
+
+
+!> With this method we can set ghost cells manually
+  subroutine dirichlet_custom(box, nb, iv, n_gc, cc)
+   type(box_t), intent(inout) :: box     !< Box that needs b.c.
+   integer, intent(in)     :: nb      !< Direction
+   integer, intent(in)     :: iv      !< Index of variable
+   integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+   !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+   real(dp), intent(inout), optional :: &
+        cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+   integer :: nc
+
+   nc = box%n_cell
+
+#if NDIM == 2
+   if (n_gc >= 3) error stop "not implemented"
+
+   if (n_gc == 2) then
+      select case (nb)
+         case (af_neighb_lowx)
+            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            cc(-1, 1:nc) = 0
+         case (af_neighb_highx)
+            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            cc(nc + 2, 1:nc) = 0
+         case (af_neighb_lowy)
+            cc(1:nc, 0) = -box%cc(1:nc, 1, iv)
+            cc(1:nc, -1) = 0
+         case (af_neighb_highy)
+            cc(1:nc, nc + 1) = -box%cc(1:nc, nc, iv)
+            cc(1:nc, nc + 2) = 0
+      end select
+   else if (n_gc == 1) then
+      select case (nb)
+         case (af_neighb_lowx)
+            box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+         case (af_neighb_highx)
+            box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+         case (af_neighb_lowy)
+            box%cc(1:nc, 0, iv) = -box%cc(1:nc, 1, iv)
+         case (af_neighb_highy)
+            box%cc(1:nc, nc + 1, iv) = -box%cc(1:nc, nc, iv)
+      end select
+   end if
+#endif
+  end subroutine dirichlet_custom
+
+
+
+!> With this method we can set ghost cells manually
+  subroutine neuman_custom(box, nb, iv, n_gc, cc)
+   type(box_t), intent(inout) :: box     !< Box that needs b.c.
+   integer, intent(in)     :: nb      !< Direction
+   integer, intent(in)     :: iv      !< Index of variable
+   integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+   !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+   real(dp), intent(inout), optional :: &
+        cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+   integer :: nc
+
+   nc = box%n_cell
+
+#if NDIM == 2
+   if (n_gc >= 3) error stop "not implemented"
+
+   if (n_gc == 2) then
+      select case (nb)
+         case (af_neighb_lowx)
+            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            cc(-1, 1:nc) = 0
+         case (af_neighb_highx)
+            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            cc(nc + 2, 1:nc) = 0
+         case (af_neighb_lowy)
+            cc(1:nc, 0) = box%cc(1:nc, 1, iv)
+            cc(1:nc, -1) = 0
+         case (af_neighb_highy)
+            cc(1:nc, nc + 1) = box%cc(1:nc, nc, iv)
+            cc(1:nc, nc + 2) = 0
+      end select
+   else if (n_gc == 1) then
+      select case (nb)
+         case (af_neighb_lowx)
+            box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+         case (af_neighb_highx)
+            box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+         case (af_neighb_lowy)
+            box%cc(1:nc, 0, iv) = box%cc(1:nc, 1, iv)
+         case (af_neighb_highy)
+            box%cc(1:nc, nc + 1, iv) = box%cc(1:nc, nc, iv)
+      end select
+   end if
+#endif
+  end subroutine neuman_custom
+
+
+!> With this method we can set ghost cells manually
+subroutine robin_custom(box, nb, iv, n_gc, cc)
+   use m_transport_data
+   use m_lookup_table
+   type(box_t), intent(inout) :: box     !< Box that needs b.c.
+   integer, intent(in)     :: nb      !< Direction
+   integer, intent(in)     :: iv      !< Index of variable
+   integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+   !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+   real(dp), intent(inout), optional :: &
+         cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+   integer :: nc
+   real(dp) :: mobility_face(box%n_cell)  ! Mobility at each boundary face
+   real(dp) :: diffusion_face(box%n_cell)  ! Diffusion at each boundary face
+   real(dp) :: electric_field_y_face(box%n_cell)  ! Electric field at each boundary face
+   real(dp) :: Td_electric_field_y_face(box%n_cell)  ! Electric field in Td at each boundary face
+   real(dp) :: n_face(box%n_cell) ! density at boundary faces (we use upwinding)
+   integer :: ix_electric_field_fc
+   real(dp) :: robin_alpha(box%n_cell)
+   real(dp) :: robin_beta(box%n_cell)
+   real(dp) :: robin_gamma(box%n_cell)
+   integer :: idx_gamma
+
+   ! This implements a robin BC: alpha * n + beta * grad(n) = gamma
+   ! We choose alpha and beta so that our robin BC prescribes the total flux J at the boundary
+   ! alpha = +- mu * E  ; beta = -D  => J = gamma
+   ! Outflow BC for electrons will have: gamma = (a - 1) * mu * E * n
+   ! with a = 1 if E . surface_normal < 0 and 0 otherwise.
+   ! In simpler terms: If the flow direction is AWAY from the boundary, gamma = 0  (dirichlet 0)
+   !                   If the flow direction is TOWARDS the boundary, gamma = +- mu * E * n (+- based on charge of species, neuman 0)
+   ! Normally we would need 'n' on the face of the boundary, but this is not stored explicitly.
+   ! We need 'n' in alpha and in gamma, but for gamma it is only in the case if the flow is towards
+   ! the boundary. For the gamma we can argue that an upwind scheme is fine and we use the cc 'n' value.
+   ! For the alpha, I am not too sure, but either way both alpha and gamma should contain the same values 
+   ! to get the cancelling of the advection term to obtain the neuman 0 condition so we will also use the upwind value
+
+   nc = box%n_cell
+
+   ix_electric_field_fc = af_find_fc_variable(tree, "field")
+
+
+#if NDIM == 2
+   if (n_gc >= 3) error stop "not implemented"
+
+   if (n_gc == 2) then
+      select case (nb)
+         case (af_neighb_lowx)
+            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            cc(-1, 1:nc) = 0
+         case (af_neighb_highx)
+            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            cc(nc + 2, 1:nc) = 0
+         case (af_neighb_lowy)
+            print *, "Low y 2 GC"
+            electric_field_y_face = box%fc(1:nc, 1, 2, ix_electric_field_fc)
+            Td_electric_field_y_face = abs(electric_field_y_face) * SI_to_Townsend / gas_number_density
+
+            mobility_face = LT_get_col(td_tbl, td_mobility, Td_electric_field_y_face) / gas_number_density
+            diffusion_face = LT_get_col(td_tbl, td_diffusion, Td_electric_field_y_face) / gas_number_density
+            !print * , "Mobility: ", mobility_face
+            robin_alpha = -mobility_face * electric_field_y_face
+            robin_beta = -diffusion_face
+
+
+            if (time == 0) then
+               !print *, "Time 0: ", time
+               n_face = box%cc(1:nc, 1, iv)
+            else
+               do idx_gamma = 1, nc
+                  if (electric_field_y_face(idx_gamma) > 0) then
+                     ! E field is pointing up from the bottom boundary
+                     ! This means electrons are flowing towards boundary
+                     n_face(idx_gamma) = box%cc(idx_gamma, 1, iv)
+                  else
+                     n_face(idx_gamma) = box%cc(idx_gamma, 0, iv)
+                  end if
+               end do
+            end if
+
+            
+            do idx_gamma = 1, nc
+               if (electric_field_y_face(idx_gamma) > 0) then
+                  ! E field is pointing up from the bottom boundary
+                  ! This means electrons are flowing towards boundary
+                  robin_gamma(idx_gamma) = -mobility_face(idx_gamma) * electric_field_y_face(idx_gamma) &
+                                          * n_face(idx_gamma)
+               else
+                  robin_gamma(idx_gamma) = 0
+               end if
+            end do
+
+            !print *, "n_face: ", n_face
+            !print *, "Gamma: ", robin_gamma
+            !print *, "Alpha: ", robin_alpha
+            !print *, "E field face: ", electric_field_y_face
+            !print *, "dr: ", box%dr
+            !print *, "Beta: ", robin_beta
+
+            cc(1:nc, 0) = (((robin_alpha * box%dr(2)) / robin_beta) * n_face) &
+                           + cc(1:nc, 1) &
+                           - ((robin_gamma * box%dr(2)) / robin_beta)
+            
+            print *, "Ghost: ", cc(1:nc, 0)
+
+            cc(1:nc, -1) = 0
+         case (af_neighb_highy)
+            cc(1:nc, nc + 1) = box%cc(1:nc, nc, iv)
+            cc(1:nc, nc + 2) = 0
+      end select
+   else if (n_gc == 1) then
+      select case (nb)
+         case (af_neighb_lowx)
+            box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+         case (af_neighb_highx)
+            box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+         case (af_neighb_lowy)
+            print *, "Low y"
+            electric_field_y_face = box%fc(1:nc, 1, 2, ix_electric_field_fc)
+            Td_electric_field_y_face = abs(electric_field_y_face) * SI_to_Townsend / gas_number_density
+
+            mobility_face = LT_get_col(td_tbl, td_mobility, Td_electric_field_y_face) / gas_number_density
+            !print * , "Mobility: ", mobility_face
+            diffusion_face = LT_get_col(td_tbl, td_diffusion, Td_electric_field_y_face) / gas_number_density
+            
+            robin_alpha = -mobility_face * electric_field_y_face
+            robin_beta = -diffusion_face
+
+
+            if (time == 0) then
+               !print *, "Time 0: ", time
+               n_face = box%cc(1:nc, 1, iv)
+            else
+               do idx_gamma = 1, nc
+                  if (electric_field_y_face(idx_gamma) > 0) then
+                     ! E field is pointing up from the bottom boundary
+                     ! This means electrons are flowing towards boundary
+                     n_face(idx_gamma) = box%cc(idx_gamma, 1, iv)
+                  else
+                     n_face(idx_gamma) = box%cc(idx_gamma, 0, iv)
+                  end if
+               end do
+            end if
+
+
+            do idx_gamma = 1, nc
+               if (electric_field_y_face(idx_gamma) > 0) then
+                  ! E field is pointing up from the bottom boundary
+                  ! This means electrons are flowing towards boundary
+                  robin_gamma(idx_gamma) = -mobility_face(idx_gamma) * electric_field_y_face(idx_gamma) &
+                                          * n_face(idx_gamma)
+               else 
+                  robin_gamma(idx_gamma) = 0
+               end if
+            end do
+
+            print *, box%lvl, box%in_use, box%r_min
+            !print *, "n_face: ", n_face
+            !print *, "Gamma: ", robin_gamma
+            !print *, "Alpha: ", robin_alpha
+            !print *, "E field face: ", electric_field_y_face
+            print *, "dr: ", box%dr
+            !print *, "Beta: ", robin_beta
+
+            box%cc(1:nc, 0, iv) = (((robin_alpha * box%dr(2)) / robin_beta) * n_face) &
+                                    + box%cc(1:nc, 1, iv) &
+                                    - ((robin_gamma * box%dr(2)) / robin_beta)
+
+            !print *, "Ghost: ", box%cc(1:nc, 0, iv)
+            !print *, "First factor: ", (robin_alpha * box%dr(2)) / robin_beta
+
+         case (af_neighb_highy)
+            box%cc(1:nc, nc + 1, iv) = box%cc(1:nc, nc, iv)
+      end select
+   end if
+#endif
+end subroutine robin_custom
+
+
+!> With this method we can set ghost cells manually
+subroutine outflow_custom(box, nb, iv, n_gc, cc)
+   type(box_t), intent(inout) :: box     !< Box that needs b.c.
+   integer, intent(in)     :: nb      !< Direction
+   integer, intent(in)     :: iv      !< Index of variable
+   integer, intent(in)     :: n_gc !< Number of ghost cells to fill
+   !> If n_gc > 1, fill ghost cell values in this array instead of box%cc
+   real(dp), intent(inout), optional :: &
+        cc(DTIMES(1-n_gc:box%n_cell+n_gc))
+   integer :: nc
+   real(dp) :: electric_field_y_face(box%n_cell)  ! Electric field at each boundary face
+   integer :: ix_electric_field_fc
+   integer :: idx_gamma
+
+
+
+   nc = box%n_cell
+   ix_electric_field_fc = af_find_fc_variable(tree, "field")
+
+
+#if NDIM == 2
+   if (n_gc >= 3) error stop "not implemented"
+
+   if (n_gc == 2) then
+      select case (nb)
+         case (af_neighb_lowx)
+            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            cc(-1, 1:nc) = 0
+         case (af_neighb_highx)
+            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            cc(nc + 2, 1:nc) = 0
+         case (af_neighb_lowy)
+
+            electric_field_y_face = box%fc(1:nc, 1, 2, ix_electric_field_fc)
+
+            do idx_gamma = 1, nc
+               if (electric_field_y_face(idx_gamma) > 0) then
+                  ! E field is pointing up from the bottom boundary
+                  ! This means electrons are flowing towards boundary -> Neuman 0
+                  cc(idx_gamma, 0) = box%cc(idx_gamma, 1, iv)
+               else
+                  ! Electrons flowing away from bottom boundary -> Dirichlet 0
+                  cc(idx_gamma, 0) = -box%cc(idx_gamma, 1, iv)
+               end if
+            end do
+
+            cc(1:nc, -1) = 0
+         case (af_neighb_highy)
+
+            electric_field_y_face = box%fc(1:nc, nc + 1, 2, ix_electric_field_fc)
+
+            do idx_gamma = 1, nc
+               if (electric_field_y_face(idx_gamma) > 0) then
+                  ! E field is pointing up towards the top boundary
+                  ! This means electrons are flowing away from the top boundary -> Dirichlet 0
+                  cc(idx_gamma, nc + 1) = -box%cc(idx_gamma, nc, iv)
+               else
+                  ! Electrons flowing towards the top boundary -> Neuman 0
+                  cc(idx_gamma, nc + 1) = box%cc(idx_gamma, nc, iv)
+               end if
+            end do
+
+            cc(1:nc, nc + 2) = 0
+      end select
+   else if (n_gc == 1) then
+      select case (nb)
+         case (af_neighb_lowx)
+            box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+         case (af_neighb_highx)
+            box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+         case (af_neighb_lowy)
+
+            electric_field_y_face = box%fc(1:nc, 1, 2, ix_electric_field_fc)
+
+            do idx_gamma = 1, nc
+               if (electric_field_y_face(idx_gamma) > 0) then
+                  ! E field is pointing up from the bottom boundary
+                  ! This means electrons are flowing towards boundary -> Neuman 0
+                  box%cc(idx_gamma, 0, iv) = box%cc(idx_gamma, 1, iv)
+               else
+                  ! Electrons flowing away from bottom boundary -> Dirichlet 0
+                  box%cc(idx_gamma, 0, iv) = -box%cc(idx_gamma, 1, iv)
+               end if
+            end do
+
+         case (af_neighb_highy)
+
+            electric_field_y_face = box%fc(1:nc, nc + 1, 2, ix_electric_field_fc)
+
+            do idx_gamma = 1, nc
+               if (electric_field_y_face(idx_gamma) > 0) then
+                  ! E field is pointing up towards the top boundary
+                  ! This means electrons are flowing away from the top boundary -> Dirichlet 0
+                  box%cc(idx_gamma, nc + 1, iv) = -box%cc(idx_gamma, nc, iv)
+               else
+                  ! Electrons flowing towards the top boundary -> Neuman 0
+                  box%cc(idx_gamma, nc + 1, iv) = box%cc(idx_gamma, nc, iv)
+               end if
+            end do
+
+      end select
+   end if
+#endif
+  end subroutine outflow_custom
 
 end program streamer
