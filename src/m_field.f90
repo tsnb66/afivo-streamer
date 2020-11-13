@@ -65,6 +65,9 @@ module m_field
   !> Electrode voltage (in V)
   real(dp), public, protected :: electrode_voltage = 0.0_dp
 
+  !> Whether the voltage of the electrode is used or the current field amplitude
+  logical, public, protected :: use_electrode_voltage = .false.
+
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
@@ -151,7 +154,9 @@ contains
     call CFG_add_get(cfg, "field_rod_radius", field_rod_radius, &
          "Electrode radius (in m, for standard rod electrode)")
     call CFG_add_get(cfg, "electrode_voltage", electrode_voltage, &
-         " The (initial) applied electrode voltage (V).")
+         "The (initial) applied electrode voltage (V).")
+    call CFG_add_get(cfg, "use_electrode_voltage", use_electrode_voltage, &
+         "Whether the defined electrode voltage is used instead of the field amplitude.")
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -367,7 +372,7 @@ contains
        if (.not. ST_use_electrode) then
          field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
        else
-         if (electrode_voltage /= 0.0_dp) then
+         if (use_electrode_voltage) then
             field_voltage = electrode_voltage
          else
             field_voltage = -(ST_domain_len(NDIM) * (1 - (abs(field_rod_r0(NDIM) - field_rod_r1(NDIM)))))&

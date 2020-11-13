@@ -342,11 +342,12 @@ contains
        error stop "use_dielectric requires user_initial_conditions to be set"
     end if
 
+    do n = 1, 100
+
        ! This placement is so that users can set epsilon before the coarse grid
        ! solver is constructed
        if ((n == 1) .and. (mg%initialized .eqv. .false.)) call mg_init(tree, mg)
 
-    do n = 1, 100
        call field_compute(tree, mg, 0, time, .false.)
 
        if (associated(user_refine)) then
