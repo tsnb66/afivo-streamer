@@ -68,6 +68,15 @@ module m_field
   !> Whether the voltage of the electrode is used or the current field amplitude
   logical, public, protected :: use_electrode_voltage = .false.
 
+  !> Rise/fall time of electrode voltage
+  real(dp), public, protected :: electrode_voltage_t_risefall = -1
+
+  !> Time of constant applied voltage within a pulse
+  real(dp), public, protected :: electrode_voltage_t_pulse = -1
+  
+  !> Time between 2 voltage pulses
+  real(dp), public, protected :: electrode_voltage_t_inter = -1
+
   logical  :: field_stability_search    = .false.
   real(dp) :: field_stability_zmin      = 0.2_dp
   real(dp) :: field_stability_zmax      = 1.0_dp
@@ -157,6 +166,12 @@ contains
          "The (initial) applied electrode voltage (V).")
     call CFG_add_get(cfg, "use_electrode_voltage", use_electrode_voltage, &
          "Whether the defined electrode voltage is used instead of the field amplitude.")
+    call CFG_add_get(cfg, "electrode_voltage_t_risefall", electrode_voltage_t_risefall, &
+         "Rise/fall time of electrode voltage")
+    call CFG_add_get(cfg, "electrode_voltage_t_pulse", electrode_voltage_t_pulse, &
+         "Time of constant applied voltage within a pulse")
+    call CFG_add_get(cfg, "electrode_voltage_t_inter", electrode_voltage_t_inter, &
+         "Time between 2 voltage pulses")
 
     if (associated(user_potential_bc)) then
        mg%sides_bc => user_potential_bc
@@ -366,6 +381,9 @@ contains
   subroutine field_set_voltage(tree, time)
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
+    real(dp)               :: electrode_voltage_t_block
+    real(dp)               :: electrode_voltage_period
+    real(dp)               :: time_voltage_shifted
 
     if (.not. voltage_set_externally) then
        current_field_amplitude = field_get_amplitude(tree, time)
@@ -373,7 +391,34 @@ contains
          field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
        else
          if (use_electrode_voltage) then
-            field_voltage = electrode_voltage
+
+            if (electrode_voltage_t_inter >= 0 .and. electrode_voltage_t_pulse >= 0 .and. electrode_voltage_t_risefall >= 0) then
+               !> We will continuously generate block pulses with a rise and fall time.
+               electrode_voltage_t_block = 2 * electrode_voltage_t_risefall + electrode_voltage_t_pulse
+               electrode_voltage_period = electrode_voltage_t_block + electrode_voltage_t_inter
+               
+               !> We calculate where our current time is in the range [0, electrode_voltage_period]
+               time_voltage_shifted = modulo(time, electrode_voltage_period)
+
+                !> Rise of voltage
+               if (time_voltage_shifted <= electrode_voltage_t_risefall) then
+                  field_voltage = electrode_voltage * (time_voltage_shifted / electrode_voltage_t_risefall)
+               !> Constant voltage within a voltage block
+               else if (time_voltage_shifted <= (electrode_voltage_t_risefall + electrode_voltage_t_pulse)) then
+                  field_voltage = electrode_voltage
+               !> Fall of voltage
+               else if (time_voltage_shifted <= electrode_voltage_t_block) then
+                  field_voltage = electrode_voltage * &
+                     (1 - (time_voltage_shifted - (electrode_voltage_t_pulse + electrode_voltage_t_risefall)) &
+                                                                              / electrode_voltage_t_risefall)
+               !> Inter voltage block 0 V time
+               else if (time_voltage_shifted <= (electrode_voltage_t_block + electrode_voltage_t_inter)) then
+                  field_voltage = 0
+               end if
+
+            else
+               field_voltage = electrode_voltage
+            end if
          else
             field_voltage = -(ST_domain_len(NDIM) * (1 - (abs(field_rod_r0(NDIM) - field_rod_r1(NDIM)))))&
                          * current_field_amplitude

@@ -443,7 +443,6 @@ contains
     print *, "                                                                               "
   end subroutine print_program_name
 
-<<<<<<< HEAD
 
    !> With this method we can set ghost cells manually
   subroutine custom_boundary_method(box, nb, iv, n_gc, cc)
@@ -905,7 +904,7 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
    end if
 #endif
   end subroutine outflow_custom
-=======
+  
   !> Set species boundary conditions at the electrode
   subroutine set_electrode_densities(tree)
     type(af_t), intent(inout) :: tree
@@ -974,6 +973,5 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
        end if
     end do; CLOSE_DO
   end subroutine electrode_species_bc
->>>>>>> 2202db91f7677ca6e686609194e0543e32215bc9
 
 end program streamer
