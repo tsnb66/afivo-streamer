@@ -6,7 +6,6 @@ module m_coupling
   use m_units_constants
   use m_gas
   use m_streamer
-  !use m_lookup_table
 
   implicit none
   private
@@ -16,31 +15,10 @@ module m_coupling
 
   public :: coupling_add_fluid_source
   public :: coupling_update_gas_density
-  !public :: read_gas_heating_efficiencies
+
 
 contains
-
-  !> Read the various gas heating efficiencies TODO: Read the vt and eex 
-
-  ! subroutine read_gas_heating_efficiencies(cfg)
-  !   use m_config
-  !   use m_table_data
-
-  !   type(CFG_t), intent(inout) :: cfg
-  !   character(len=string_len)  :: rt_efficiency_table
-
-  !   rt_efficiency_table = undefined_str
-  !   call CFG_add_get(cfg, "gas%rt_eff_table", rt_efficiency_table, &
-  !        "File containing Rotational-translational efficiency versus applied field (Td)")
-  !   if (rt_efficiency_table == undefined_str) error stop "gas%rt_eff_table undefined"
-
-  !   if (rt_efficiency_table /= undefined_str) then
-  !      call table_from_file(rt_efficiency_table, "rt_efficiency_vs_time", &
-  !           rt_efficiency_field, rt_efficiency_val)
-  !      rt_efficiency_field = Townsend_to_SI*rt_efficiency_field
-  !   end if
-  ! end subroutine read_gas_heating_efficiencies
-
+ 
   !> Add source terms form the fluid model to the Euler equations
   subroutine coupling_add_fluid_source(tree, dt)
     type(af_t), intent(inout) :: tree
@@ -56,8 +34,11 @@ contains
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
     real(dp)                   :: J_dot_E
-    real(dp)                   :: eta_rt
-    eta_rt = 1.0_dp
+    real(dp)                   :: eta, eta_rt, eta_el, eta_vt
+    eta_rt = 0.0_dp
+    eta_el = 0.0_dp
+    eta_vt = 0.0_dp
+    eta = 1.0_dp
     nc = box%n_cell
     do KJI_DO(1, nc)
        ! Compute inner product flux * field over the cell faces
@@ -78,9 +59,14 @@ contains
         if (effic_table_use) then
          call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
          box%cc(IJK, electric_fld), eta_rt)
+         call LT_lin_interp_list(el_efficiency_field,el_efficiency_val, &
+         box%cc(IJK, electric_fld), eta_el)
+         call LT_lin_interp_list(vt_efficiency_field,vt_efficiency_val, &
+         box%cc(IJK, electric_fld), eta_vt)
+         eta = eta_rt + 0.3_dp*eta_el
         end if
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           eta_rt *  J_dot_E * UC_elec_charge * dt_vec(1)
+           eta *  J_dot_E * UC_elec_charge * dt_vec(1)
     end do; CLOSE_DO
   end subroutine add_heating_box
 
