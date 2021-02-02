@@ -46,9 +46,13 @@ module m_gas
 
   ! Gas mean molecular weight (kg)
   real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
+    ! Joule heating efficiency --- TODO - add EEx and VT efficiencies
+  !> List of fields
+  !real(dp), allocatable :: rt_efficiency_field(:)
 
-  ! Joule heating efficiency
-  real(dp), public, protected :: gas_heating_efficiency  = 1.0_dp
+  !> List of rotational-translational efficiencies
+  !real(dp), allocatable :: rt_efficiency_val(:)
+
 
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
@@ -90,9 +94,12 @@ contains
     use m_units_constants
     use m_user_methods
     use m_dt
+    !use m_table_data
+
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
+    !character(len=string_len)  :: rt_efficiency_table
 
     call CFG_add_get(cfg, "gas%dynamics", gas_dynamics, &
          "Whether the gas dynamics are simulated")
@@ -127,6 +134,19 @@ contains
 #endif
        call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e))
        call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
+
+       
+
+       !rt_efficiency_table = undefined_str
+     !   call CFG_add_get(cfg, "gas%rt_eff_table", rt_efficiency_table, &
+     !      "File containing Rotational-translational efficiency versus applied field (Td)")
+     !   if (rt_efficiency_table == undefined_str) error stop "gas%rt_eff_table undefined"
+
+     !   if (rt_efficiency_table /= undefined_str) then
+     !   call table_from_file(rt_efficiency_table, "rt_efficiency_vs_time", &
+     !        rt_efficiency_field, rt_efficiency_val)
+     !   !rt_efficiency_field = Townsend_to_SI*rt_efficiency_field
+     !   end if
     else if (associated(user_gas_density)) then
        gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)
@@ -140,8 +160,6 @@ contains
          "The gas temperature (Kelvin)")
     call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
          "Gas mean molecular weight (kg), for gas dynamics")
-    call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
-         "Joule heating efficiency (between 0.0 and 1.0)")
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &
