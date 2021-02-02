@@ -47,11 +47,14 @@ module m_gas
   ! Gas mean molecular weight (kg)
   real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
     ! Joule heating efficiency --- TODO - add EEx and VT efficiencies
+
+  !> Whether to use a constant JdotE or a table value
+  logical, public, protected :: effic_table_use = .false.
   !> List of fields
-  !real(dp), allocatable :: rt_efficiency_field(:)
+  real(dp), allocatable, public, protected :: rt_efficiency_field(:)
 
   !> List of rotational-translational efficiencies
-  !real(dp), allocatable :: rt_efficiency_val(:)
+  real(dp), allocatable, public, protected :: rt_efficiency_val(:)
 
 
   ! Ratio of heat capacities (polytropic index)
@@ -94,12 +97,12 @@ contains
     use m_units_constants
     use m_user_methods
     use m_dt
-    !use m_table_data
+    use m_table_data
 
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
-    !character(len=string_len)  :: rt_efficiency_table
+    character(len=string_len)  :: rt_efficiency_table
 
     call CFG_add_get(cfg, "gas%dynamics", gas_dynamics, &
          "Whether the gas dynamics are simulated")
@@ -136,17 +139,18 @@ contains
        call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
 
        
-
-       !rt_efficiency_table = undefined_str
-     !   call CFG_add_get(cfg, "gas%rt_eff_table", rt_efficiency_table, &
-     !      "File containing Rotational-translational efficiency versus applied field (Td)")
-     !   if (rt_efficiency_table == undefined_str) error stop "gas%rt_eff_table undefined"
-
-     !   if (rt_efficiency_table /= undefined_str) then
-     !   call table_from_file(rt_efficiency_table, "rt_efficiency_vs_time", &
-     !        rt_efficiency_field, rt_efficiency_val)
-     !   !rt_efficiency_field = Townsend_to_SI*rt_efficiency_field
-     !   end if
+       call CFG_add_get(cfg, "gas%use_efficiency_table", effic_table_use, "Whether to use a table for JdotE transfer efficiency")
+       rt_efficiency_table = undefined_str
+       if (effic_table_use) then
+         call CFG_add_get(cfg, "gas%rt_table", rt_efficiency_table, &
+          "File containing Rotational-translational efficiency versus applied field (Td)")
+         if (rt_efficiency_table == undefined_str) error stop "gas%rt_table undefined"
+         if (rt_efficiency_table /= undefined_str) then
+           call table_from_file(rt_efficiency_table, "rt_efficiency_vs_time", &
+            rt_efficiency_field, rt_efficiency_val)
+         rt_efficiency_field = Townsend_to_SI*rt_efficiency_field
+         end if
+       end if
     else if (associated(user_gas_density)) then
        gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)

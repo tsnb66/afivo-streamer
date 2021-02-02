@@ -50,7 +50,8 @@ contains
   end subroutine coupling_add_fluid_source
 
   subroutine add_heating_box(box, dt_vec)
-    !use m_gas
+    use m_gas
+    use m_lookup_table
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
@@ -74,8 +75,10 @@ contains
             box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
             box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
 #endif
-       !call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
-       !box%cc(IJK, electric_fld), eta_rt)
+        if (effic_table_use) then
+         call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
+         box%cc(IJK, electric_fld), eta_rt)
+        end if
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
            eta_rt *  J_dot_E * UC_elec_charge * dt_vec(1)
     end do; CLOSE_DO
