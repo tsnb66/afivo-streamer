@@ -58,12 +58,13 @@ contains
 #endif
         if (effic_table_use) then
          call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
-         box%cc(IJK, electric_fld), eta_rt)
-         call LT_lin_interp_list(el_efficiency_field,el_efficiency_val, &
-         box%cc(IJK, electric_fld), eta_el)
-         call LT_lin_interp_list(vt_efficiency_field,vt_efficiency_val, &
-         box%cc(IJK, electric_fld), eta_vt)
-         eta = eta_rt + 0.3_dp*eta_el
+          box%cc(IJK, electric_fld), eta_rt)
+          call LT_lin_interp_list(el_efficiency_field,el_efficiency_val, &
+          box%cc(IJK, electric_fld), eta_el)
+          call LT_lin_interp_list(vt_efficiency_field,vt_efficiency_val, &
+          box%cc(IJK, electric_fld), eta_vt)
+          eta = eta_rt + 0.3_dp*eta_el
+          if (eta .ge. 1) error stop "Heating efficiency larger than 1"
         end if
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
            eta *  J_dot_E * UC_elec_charge * dt_vec(1)
