@@ -37,3 +37,5 @@ documentation/html/*
 **/run.log
 /programs/heating_2d/misc*
 /programs/heating_2d/old_cfg
+
+programs/heating_2d/.ipynb_checkpoints/

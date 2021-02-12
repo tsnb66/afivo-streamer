@@ -56,18 +56,22 @@ contains
             box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
             box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
 #endif
-        if (effic_table_use) then
-         call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
+      if (effic_table_use) then
+        call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
           box%cc(IJK, electric_fld), eta_rt)
-          call LT_lin_interp_list(el_efficiency_field,el_efficiency_val, &
-          box%cc(IJK, electric_fld), eta_el)
-          call LT_lin_interp_list(vt_efficiency_field,vt_efficiency_val, &
-          box%cc(IJK, electric_fld), eta_vt)
-          eta = eta_rt + 0.3_dp*eta_el
-          if (eta .ge. 1) error stop "Heating efficiency larger than 1"
-        end if
+        call LT_lin_interp_list(el_efficiency_field,el_efficiency_val, &
+        box%cc(IJK, electric_fld), eta_el)
+        call LT_lin_interp_list(vt_efficiency_field,vt_efficiency_val, &
+        box%cc(IJK, electric_fld), eta_vt)
+        eta = eta_rt + 0.3_dp*eta_el
+        if (eta .ge. 1) error stop "Heating efficiency larger than 1"
+      end if
+      J_dot_E = J_dot_E * UC_elec_charge
+      box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
+        (eta_vt*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           eta *  J_dot_E * UC_elec_charge * dt_vec(1)
+           (eta *  J_dot_E + box%cc(IJK, i_vibration_energy)/t_vt) &
+            * dt_vec(1)
     end do; CLOSE_DO
   end subroutine add_heating_box
 

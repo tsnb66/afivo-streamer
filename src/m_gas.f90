@@ -68,6 +68,9 @@ module m_gas
   !> List of vibrational efficiencies
   real(dp), allocatable, public, protected :: vt_efficiency_val(:)
 
+  !> Vibration-Translation relaxation time
+  real(dp), public, protected :: t_vt = 20e-6_dp
+
 
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
@@ -82,6 +85,9 @@ module m_gas
 
   ! Indices of the Euler fluxes
   integer, public, protected :: gas_fluxes(n_vars_euler) = -1
+
+  ! Index of slow heating term
+  integer, public, protected :: i_vibration_energy = -1
 
   ! Names of the Euler variables
   character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
@@ -152,6 +158,9 @@ contains
        call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e))
        call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
 
+       ! HEMATODO: Move this elesehwere later so that it is created only when using the detailed model of heating
+       call af_add_cc_variable(tree, "vibrational_energy", ix = i_vibration_energy)
+
        
        call CFG_add_get(cfg, "gas%use_efficiency_table", effic_table_use, "Whether to use a table for JdotE transfer efficiency")
        rt_efficiency_table = undefined_str
@@ -164,6 +173,7 @@ contains
             "File containing Electronic excitation efficiency versus applied field (Td)")
           call CFG_add_get(cfg, "gas%vt_table", vt_efficiency_table, &
             "File containing Vibrational efficiency versus applied field (Td)")
+          call CFG_add_get(cfg, "gas%tau_vt", t_vt, "Vibration-Translation relaxation time (default=20e-6 sec)")
           if (rt_efficiency_table == undefined_str) error stop "gas%rt_table undefined"
           if (el_efficiency_table == undefined_str) error stop "gas%el_table undefined"
           if (vt_efficiency_table == undefined_str) error stop "gas%vt_table undefined"
