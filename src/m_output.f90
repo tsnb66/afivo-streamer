@@ -242,7 +242,9 @@ contains
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
-       if (photoi_enabled) call photoi_set_src(tree, global_dt)
+       if (photoi_enabled) then
+               call photoi_set_src(tree, global_dt)
+       end if
        call field_set_rhs(tree, 0)
 
        do i = 1, tree%n_var_cell
