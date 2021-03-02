@@ -192,7 +192,7 @@ program streamer
         call field_compute(tree, mg, 0, time, .true.)
         if (compute_power_density) call compute_total_energy_density(tree, dt)
         if (gas_dynamics) then
-            print *, "Dt vector: ", dt
+            !print *, "Dt vector: ", dt
             call coupling_add_fluid_source(tree, dt)
         end if
         if (circuit_used) call circuit_update(tree, dt)

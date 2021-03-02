@@ -34,6 +34,7 @@ contains
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
     real(dp)                   :: J_dot_E
+    !real(dp),parameter         :: gamma = 1.4_dp, gas_const = 8.314_dp
     real(dp)                   :: eta, eta_rt, eta_el, eta_vt
     eta_rt = 0.0_dp
     eta_el = 0.0_dp
@@ -69,6 +70,8 @@ contains
       J_dot_E = J_dot_E * UC_elec_charge
       box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
         (eta_vt*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
+      !box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
+      !  (J_dot_E*(gamma-1)/(gamma*gas_const)) * dt_vec(1)
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
            (eta *  J_dot_E + box%cc(IJK, i_vibration_energy)/t_vt) &
             * dt_vec(1)
