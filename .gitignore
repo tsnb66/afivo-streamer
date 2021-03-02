@@ -39,3 +39,9 @@ documentation/html/*
 /programs/heating_2d/old_cfg
 
 programs/heating_2d/.ipynb_checkpoints/
+
+*.mp4
+
+programs/heating_2d/temperature_model_comp.png
+
+programs/heating_2d/streamer_cyl.cfg
