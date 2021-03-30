@@ -72,8 +72,8 @@ program streamer
 
   if (electron_bc == "standard") then
       print *, "Using standard electron_BC"
-      call af_set_cc_methods(tree, ix_electron, &
-               bc_species, af_gc_interp_lim, ST_prolongation_method)
+      !call af_set_cc_methods(tree, ix_electron, &
+      !         bc_species, af_gc_interp_lim, ST_prolongation_method)
   else if (electron_bc == "dirichlet_custom") then
       print *, "Using custom dirichlet 0 electron_BC"
       call af_set_cc_methods(tree, ix_electron, &
