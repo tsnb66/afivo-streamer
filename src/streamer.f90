@@ -72,23 +72,23 @@ program streamer
 
   if (electron_bc == "standard") then
       print *, "Using standard electron_BC"
-      !call af_set_cc_methods(tree, ix_electron, &
-      !         bc_species, af_gc_interp_lim, ST_prolongation_method)
+      call af_set_cc_methods(tree, species_itree(ix_electron), &
+               bc_species, af_gc_interp_lim, ST_prolongation_method)
   else if (electron_bc == "dirichlet_custom") then
       print *, "Using custom dirichlet 0 electron_BC"
-      call af_set_cc_methods(tree, ix_electron, &
+      call af_set_cc_methods(tree, species_itree(ix_electron), &
                rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=dirichlet_custom)
   else if (electron_bc == "neuman_custom") then
       print *, "Using custom neuman 0 electron_BC"
-      call af_set_cc_methods(tree, ix_electron, &
+      call af_set_cc_methods(tree, species_itree(ix_electron), &
                rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=neuman_custom)
   else if (electron_bc == "robin_custom") then
       print *, "Using custom robin electron_BC"
-      call af_set_cc_methods(tree, ix_electron, &
+      call af_set_cc_methods(tree, species_itree(ix_electron), &
                rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=robin_custom)
   else if (electron_bc == "outflow") then
       print *, "Using custom outflow electron_BC"
-      call af_set_cc_methods(tree, ix_electron, &
+      call af_set_cc_methods(tree, species_itree(ix_electron), &
                rb=af_gc_interp_lim, prolong=ST_prolongation_method, bc_custom=outflow_custom)
   end if
 
