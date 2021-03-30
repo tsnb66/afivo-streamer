@@ -46,9 +46,31 @@ module m_gas
 
   ! Gas mean molecular weight (kg)
   real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
+    ! Joule heating efficiency
 
-  ! Joule heating efficiency
-  real(dp), public, protected :: gas_heating_efficiency  = 1.0_dp
+  !> Whether to use a constant JdotE or a table value
+  logical, public, protected :: effic_table_use = .false.
+  !> List of fields for rotational-translational efficiencies
+  real(dp), allocatable, public, protected :: rt_efficiency_field(:)
+
+  !> List of rotational-translational efficiencies
+  real(dp), allocatable, public, protected :: rt_efficiency_val(:)
+
+  !> List of fields for electronic excitations efficiencies
+  real(dp), allocatable, public, protected :: el_efficiency_field(:)
+
+  !> List of electronic excitations efficiencies
+  real(dp), allocatable, public, protected :: el_efficiency_val(:)
+
+  !> List of fields for vibrational efficiencies
+  real(dp), allocatable, public, protected :: vt_efficiency_field(:)
+
+  !> List of vibrational efficiencies
+  real(dp), allocatable, public, protected :: vt_efficiency_val(:)
+
+  !> Vibration-Translation relaxation time
+  real(dp), public, protected :: t_vt = 20e-6_dp
+
 
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
@@ -63,6 +85,9 @@ module m_gas
 
   ! Indices of the Euler fluxes
   integer, public, protected :: gas_fluxes(n_vars_euler) = -1
+
+  ! Index of slow heating term
+  integer, public, protected :: i_vibration_energy = -1
 
   ! Names of the Euler variables
   character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
@@ -90,9 +115,14 @@ contains
     use m_units_constants
     use m_user_methods
     use m_dt
+    use m_table_data
+
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg
     integer                    :: n
+    character(len=string_len)  :: rt_efficiency_table
+    character(len=string_len)  :: el_efficiency_table
+    character(len=string_len)  :: vt_efficiency_table
 
     call CFG_add_get(cfg, "gas%dynamics", gas_dynamics, &
          "Whether the gas dynamics are simulated")
@@ -127,6 +157,43 @@ contains
 #endif
        call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e))
        call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
+
+       ! HEMATODO: Move this elesehwere later so that it is created only when using the detailed model of heating
+       call af_add_cc_variable(tree, "vibrational_energy", ix = i_vibration_energy)
+
+       
+       call CFG_add_get(cfg, "gas%use_efficiency_table", effic_table_use, "Whether to use a table for JdotE transfer efficiency")
+       rt_efficiency_table = undefined_str
+       el_efficiency_table = undefined_str
+       vt_efficiency_table = undefined_str
+       if (effic_table_use) then
+          call CFG_add_get(cfg, "gas%rt_table", rt_efficiency_table, &
+            "File containing Rotational-translational efficiency versus applied field (Td)")
+          call CFG_add_get(cfg, "gas%el_table", el_efficiency_table, &
+            "File containing Electronic excitation efficiency versus applied field (Td)")
+          call CFG_add_get(cfg, "gas%vt_table", vt_efficiency_table, &
+            "File containing Vibrational efficiency versus applied field (Td)")
+          call CFG_add_get(cfg, "gas%tau_vt", t_vt, "Vibration-Translation relaxation time (default=20e-6 sec)")
+          if (rt_efficiency_table == undefined_str) error stop "gas%rt_table undefined"
+          if (el_efficiency_table == undefined_str) error stop "gas%el_table undefined"
+          if (vt_efficiency_table == undefined_str) error stop "gas%vt_table undefined"
+          if (rt_efficiency_table /= undefined_str) then
+            call table_from_file(rt_efficiency_table, "rt_efficiency_vs_field", &
+            rt_efficiency_field, rt_efficiency_val)
+            rt_efficiency_field = Townsend_to_SI*rt_efficiency_field
+          end if
+          if (el_efficiency_table /= undefined_str) then
+            call table_from_file(el_efficiency_table, "el_efficiency_vs_field", &
+            el_efficiency_field, el_efficiency_val)
+            el_efficiency_field = Townsend_to_SI*el_efficiency_field
+          end if
+          if (vt_efficiency_table /= undefined_str) then
+            call table_from_file(vt_efficiency_table, "vt_efficiency_vs_field", &
+            vt_efficiency_field, vt_efficiency_val)
+            vt_efficiency_field = Townsend_to_SI*vt_efficiency_field
+          end if
+
+       end if
     else if (associated(user_gas_density)) then
        gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)
@@ -140,8 +207,6 @@ contains
          "The gas temperature (Kelvin)")
     call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
          "Gas mean molecular weight (kg), for gas dynamics")
-    call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
-         "Joule heating efficiency (between 0.0 and 1.0)")
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &

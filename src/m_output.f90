@@ -99,8 +99,16 @@ module m_output
   public :: output_write
   public :: output_log
   public :: output_status
+  public :: compute_total_energy_density
 
 contains
+
+  subroutine compute_total_energy_density(tree, dt)
+          type(af_t), intent(inout) :: tree
+          real(dp), intent(in)      :: dt
+
+          call af_loop_box_arg(tree, set_energy_density_box, [dt], .true.)
+  end subroutine compute_total_energy_density
 
   subroutine output_initialize(tree, cfg)
     use m_config
@@ -239,7 +247,9 @@ contains
     if (silo_write .and. &
          modulo(output_cnt, silo_per_outputs) == 0) then
        ! Because the mesh could have changed
-       if (photoi_enabled) call photoi_set_src(tree, global_dt)
+       if (photoi_enabled) then
+               call photoi_set_src(tree, global_dt)
+       end if
        call field_set_rhs(tree, 0)
 
        do i = 1, tree%n_var_cell
@@ -663,4 +673,33 @@ contains
     end do; CLOSE_DO
   end subroutine set_gas_primitives_box
 
+  subroutine set_energy_density_box(box, dt_vec)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    real(dp), intent(in)       :: dt_vec(:)
+    integer                    :: IJK, nc
+    real(dp)                   :: J_dot_E
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+       ! Compute inner product flux * field over the cell faces
+       J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
+#if NDIM == 1
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, 1, flux_elec) * box%fc(i+1, 1, electric_fld))
+#elif NDIM == 2
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, j, 1, flux_elec) * box%fc(i+1, j, 1, electric_fld) + &
+            box%fc(i, j+1, 2, flux_elec) * box%fc(i, j+1, 2, electric_fld))
+#elif NDIM == 3
+       J_dot_E = J_dot_E + 0.5_dp * (&
+            box%fc(i+1, j, k, 1, flux_elec) * box%fc(i+1, j, k, 1, electric_fld) + &
+            box%fc(i, j+1, k, 2, flux_elec) * box%fc(i, j+1, k, 2, electric_fld) + &
+            box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
+#endif
+       box%cc(IJK, i_energy_density) = box%cc(IJK, i_energy_density) + &
+              UC_elec_charge * J_dot_E * dt_vec(1)
+    end do; CLOSE_DO
+  end subroutine set_energy_density_box
 end module m_output
+

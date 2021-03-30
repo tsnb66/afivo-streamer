@@ -72,8 +72,8 @@ program streamer
 
   if (electron_bc == "standard") then
       print *, "Using standard electron_BC"
-      call af_set_cc_methods(tree, ix_electron, &
-               bc_species, af_gc_interp_lim, ST_prolongation_method)
+      !call af_set_cc_methods(tree, ix_electron, &
+      !         bc_species, af_gc_interp_lim, ST_prolongation_method)
   else if (electron_bc == "dirichlet_custom") then
       print *, "Using custom dirichlet 0 electron_BC"
       call af_set_cc_methods(tree, ix_electron, &
@@ -230,8 +230,11 @@ program streamer
 
         ! Make sure field is available for latest time state
         call field_compute(tree, mg, 0, time, .true.)
-
-        if (gas_dynamics) call coupling_add_fluid_source(tree, dt)
+        if (compute_power_density) call compute_total_energy_density(tree, dt)
+        if (gas_dynamics) then
+            !print *, "Dt vector: ", dt
+            call coupling_add_fluid_source(tree, dt)
+        end if
         if (circuit_used) call circuit_update(tree, dt)
      else
         dt_lim = dt_max
