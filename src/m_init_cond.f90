@@ -234,6 +234,7 @@ contains
                gas_pressure * 1e5_dp / (gas_euler_gamma - 1) + &
                0.5_dp * sum(box%cc(IJK, gas_vars(i_mom))**2) / &
                box%cc(IJK, gas_vars(i_rho))
+          !box%cc(IJK, i_vibration_energy) = 300.0_dp !Hemaditya added this to test the solve-for-temperature-only idea
        else if (associated(user_gas_density)) then
           box%cc(IJK, i_gas_dens) = user_gas_density(box, IJK)
        end if

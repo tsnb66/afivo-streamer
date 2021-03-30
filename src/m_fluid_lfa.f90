@@ -335,7 +335,11 @@ contains
                [v(i+1, j, k, 1), v(i, j+1, k, 2), v(i, j, k+1, 3)])
 #endif
           ! CFL condition
-          dt_cfl = 1.0_dp/sum(abs(vmean) * inv_dr)
+          !print *,"test: ", sum(abs(vmean))
+         !  if (sum(abs(vmean)*inv_dr) < 1e-5_dp) then
+         !    print *, vmean
+         !  end if
+          dt_cfl = 1.0_dp/sum(max(abs(vmean), epsilon(1.0_dp)) * inv_dr)
 
           ! Diffusion condition
           dt_dif = minval(tree%boxes(id)%dr)**2 / &
