@@ -58,9 +58,9 @@ contains
        
        
        n_vars = 1
-       var_names(1) = 'total_power'
+       var_names(1) = 'total_energy'
        
-       call af_tree_sum_cc(tree, i_power_density, var_values(1))
+       call af_tree_sum_cc(tree, i_energy_density, var_values(1))
   end subroutine total_power_deposited
   
   

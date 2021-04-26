@@ -69,11 +69,12 @@ contains
       end if
       J_dot_E = J_dot_E * UC_elec_charge
       box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
+      !   (0.5e9_dp*(box%cc(IJK, i_vibration_energy) - 1.0_dp))*dt_vec(1)
         (eta_vt*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
       !box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
       !  (J_dot_E*(gamma-1)/(gamma*gas_const)) * dt_vec(1)
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           (eta *  J_dot_E + box%cc(IJK, i_vibration_energy)/t_vt) &
+           (eta *  J_dot_E+ box%cc(IJK, i_vibration_energy)/t_vt) &
             * dt_vec(1)
     end do; CLOSE_DO
   end subroutine add_heating_box

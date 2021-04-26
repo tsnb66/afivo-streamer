@@ -159,7 +159,8 @@ contains
        call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
 
        ! HEMATODO: Move this elesehwere later so that it is created only when using the detailed model of heating
-       call af_add_cc_variable(tree, "vibrational_energy", ix = i_vibration_energy)
+       call af_add_cc_variable(tree, "vibrational_energy", ix = i_vibration_energy, &
+       n_copies=af_advance_num_steps(time_integrator))
 
        
        call CFG_add_get(cfg, "gas%use_efficiency_table", effic_table_use, "Whether to use a table for JdotE transfer efficiency")

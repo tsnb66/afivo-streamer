@@ -26,9 +26,13 @@ def get_argparser():
                     help='Database name (e.g. sim.silo or "sim_*.silo")')
     pr.add_argument('varname', type=str,
                     help='Extract this (scalar) variable')
-    #pr.add_argument('-r', type=float, nargs=3, required=True,
-    #                metavar=('x', 'y', 'z'),
-    #                help='Point to sample at(z=0 in 2D)')
+    pr.add_argument('-r0', type=float, nargs=3, required=True,
+                    metavar=('x0', 'y0', 'z0'),
+                    help='Start location of line (z=0 in 2D)')
+    pr.add_argument('-r1', type=float, nargs=3, required=True,
+                    metavar=('x1', 'y1', 'z1'),
+                    help='End location of line (z=0 in 2D)')
+                    required=True, help="End point of the line (x y z)")                
     pr.add_argument('-r', type=float, required = True,
                     help='Point to be sampled')
     pr.add_argument('-output', type=str, default='point',
@@ -62,11 +66,10 @@ if __name__ == '__main__':
     timeSteps = v.TimeSliderGetNStates()
 
     LineoutAtts = v.LineoutAttributes()
-    #Add input functionality for this later
-    #LineoutAtts.point1 = tuple(args.r0)
-    #LineoutAtts.point2 = tuple(args.r1)
-    LineoutAtts.point1 = (0.0, 0.0, 0.0)
-    LineoutAtts.point2 = (0.0, 16e-3, 0.0)
+    LineoutAtts.point1 = tuple(args.r0)
+    LineoutAtts.point2 = tuple(args.r1)
+    #LineoutAtts.point1 = (0.0, 0.0, 0.0)
+    #LineoutAtts.point2 = (0.0, 20e-3, 0.0)
     LineoutAtts.interactive = 0
     LineoutAtts.ignoreGlobal = 0
     v.SetOperatorOptions(LineoutAtts, 1)
