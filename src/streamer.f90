@@ -549,10 +549,14 @@ contains
    if (n_gc == 2) then
       select case (nb)
          case (af_neighb_lowx)
-            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            !Hema thinks: cc(0, 1:nc) = -box%cc(1, 1:nc, iv)
+            cc(0, 1:nc) = -box%cc(1, 1:nc, iv)
+            !cc(0, 1:nc) = box%cc(1, 1:nc, iv)
             cc(-1, 1:nc) = 0
          case (af_neighb_highx)
-            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            !Hema thinks: cc(nc+1, 1:nc) = -box%cc(nc, 1:nc, iv)
+            cc(nc + 1, 1:nc) = -box%cc(nc, 1:nc, iv)
+            !cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
             cc(nc + 2, 1:nc) = 0
          case (af_neighb_lowy)
             cc(1:nc, 0) = -box%cc(1:nc, 1, iv)
@@ -564,9 +568,11 @@ contains
    else if (n_gc == 1) then
       select case (nb)
          case (af_neighb_lowx)
-            box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+            !box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+            box%cc(0, 1:nc, iv) = - box%cc(1, 1:nc, iv)
          case (af_neighb_highx)
-            box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+            !box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+            box%cc(nc + 1, 1:nc, iv) = -box%cc(nc, 1:nc, iv)
          case (af_neighb_lowy)
             box%cc(1:nc, 0, iv) = -box%cc(1:nc, 1, iv)
          case (af_neighb_highy)
@@ -951,7 +957,7 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
             associated(bc_species, af_bc_neumann_zero)) then
              ! At the boundary of the electrode
 #if NDIM == 1
-             dens_nb = [box%cc(i-1, i_lsf), &
+             dens_nb = [box%cc(i-1, i_electron), &
                   box%cc(i+1, i_electron)]
 #elif NDIM == 2
              dens_nb = [box%cc(i-1, j, i_electron), &
