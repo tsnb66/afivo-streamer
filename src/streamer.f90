@@ -592,10 +592,14 @@ contains
    if (n_gc == 2) then
       select case (nb)
          case (af_neighb_lowx)
-            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            !Hema thinks: cc(0, 1:nc) = -box%cc(1, 1:nc, iv)
+            cc(0, 1:nc) = -box%cc(1, 1:nc, iv)
+            !cc(0, 1:nc) = box%cc(1, 1:nc, iv)
             cc(-1, 1:nc) = 0
          case (af_neighb_highx)
-            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            !Hema thinks: cc(nc+1, 1:nc) = -box%cc(nc, 1:nc, iv)
+            cc(nc + 1, 1:nc) = -box%cc(nc, 1:nc, iv)
+            !cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
             cc(nc + 2, 1:nc) = 0
          case (af_neighb_lowy)
             cc(1:nc, 0) = -box%cc(1:nc, 1, iv)
@@ -607,9 +611,11 @@ contains
    else if (n_gc == 1) then
       select case (nb)
          case (af_neighb_lowx)
-            box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+            !box%cc(0, 1:nc, iv) = box%cc(1, 1:nc, iv)
+            box%cc(0, 1:nc, iv) = - box%cc(1, 1:nc, iv)
          case (af_neighb_highx)
-            box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+            !box%cc(nc + 1, 1:nc, iv) = box%cc(nc, 1:nc, iv)
+            box%cc(nc + 1, 1:nc, iv) = -box%cc(nc, 1:nc, iv)
          case (af_neighb_lowy)
             box%cc(1:nc, 0, iv) = -box%cc(1:nc, 1, iv)
          case (af_neighb_highy)
@@ -857,6 +863,7 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
         cc(DTIMES(1-n_gc:box%n_cell+n_gc))
    integer :: nc
    real(dp) :: electric_field_y_face(box%n_cell)  ! Electric field at each boundary face
+   real(dp) :: electric_field_x_face(box%n_cell)  ! Electric field at each boundary face
    integer :: ix_electric_field_fc
    integer :: idx_gamma
 
@@ -872,10 +879,26 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
    if (n_gc == 2) then
       select case (nb)
          case (af_neighb_lowx)
-            cc(0, 1:nc) = box%cc(1, 1:nc, iv)
+            electric_field_x_face = box%fc(1,1:nc,1,ix_electric_field_fc)
+            do idx_gamma = 1,nc
+               if (electric_field_x_face(idx_gamma) > 0) then
+                  cc(idx_gamma,0) = box%cc(1,idx_gamma,iv)
+               else
+                  cc(idx_gamma,0) = -box%cc(1,idx_gamma,iv)
+               end if
+            end do
+            !cc(0, 1:nc) = box%cc(1, 1:nc, iv)
             cc(-1, 1:nc) = 0
          case (af_neighb_highx)
-            cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
+            electric_field_x_face = box%fc(nc+1,1:nc,1,ix_electric_field_fc)
+            do idx_gamma = 1,nc
+               if (electric_field_x_face(idx_gamma) > 0) then
+                  cc(idx_gamma,nc+1) = box%cc(nc,idx_gamma,iv)
+               else
+                  cc(idx_gamma,nc+1) = -box%cc(nc,idx_gamma,iv)
+               end if
+            end do
+            !cc(nc + 1, 1:nc) = box%cc(nc, 1:nc, iv)
             cc(nc + 2, 1:nc) = 0
          case (af_neighb_lowy)
 
