@@ -8,6 +8,16 @@ module m_field
   implicit none
   private
 
+
+  !> Use a table with time vs voltage
+  logical :: voltage_table_use
+
+  !> List of times
+  real(dp), allocatable :: voltage_table_times(:)
+
+  !> List of voltages
+  real(dp), allocatable :: voltage_table_voltages(:)
+
   !> Use a table with fields versus time
   logical :: field_table_use
 
@@ -112,7 +122,7 @@ contains
     type(af_t), intent(inout)  :: tree
     type(CFG_t), intent(inout) :: cfg !< Settings
     type(mg_t), intent(inout)  :: mg  !< Multigrid option struct
-    character(len=string_len)  :: field_table, electrode_type
+    character(len=string_len)  :: field_table, electrode_type, voltage_table
 
     field_table = undefined_str
     call CFG_add_get(cfg, "field_table", field_table, &
@@ -123,6 +133,17 @@ contains
             field_table_times, field_table_fields)
     else
        field_table_use = .false.
+    end if
+
+    voltage_table = undefined_str
+    call CFG_add_get(cfg, "voltage_table", voltage_table, &
+         "File containing time vs voltage (V)")
+    if (voltage_table /= undefined_str) then
+      voltage_table_use = .true.
+      call table_from_file(voltage_table, "time_vs_voltage", &
+            voltage_table_times, voltage_table_voltages)
+    else
+      voltage_table_use = .false.
     end if
 
     call CFG_add_get(cfg, "field_mod_t0", field_mod_t0, &
@@ -421,6 +442,8 @@ contains
 
   !> Compute the voltage at a given time
   subroutine field_set_voltage(tree, time)
+   use m_lookup_table
+
     type(af_t), intent(in) :: tree
     real(dp), intent(in)   :: time
     real(dp)               :: electrode_voltage_t_block
@@ -432,7 +455,11 @@ contains
        if (.not. ST_use_electrode) then
          field_voltage = -ST_domain_len(NDIM) * current_field_amplitude
        else
-         if (use_electrode_voltage) then
+
+         if (voltage_table_use) then
+            call LT_lin_interp_list(voltage_table_times, voltage_table_voltages, &
+               time, field_voltage)
+         else if (use_electrode_voltage) then
 
             if (electrode_voltage_t_inter >= 0 .and. electrode_voltage_t_pulse >= 0 .and. electrode_voltage_t_risefall >= 0) then
                !> We will continuously generate block pulses with a rise and fall time.
