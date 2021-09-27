@@ -78,7 +78,10 @@ module m_streamer
   type(prng_t), public :: ST_prng
 
   !> Avoid dielectric relaxation time step constraint by limiting flux
-  logical, public, protected :: ST_drt_limit_flux = .false.
+  logical, public :: ST_drt_limit_flux = .false.
+
+  !> Turn on the ST_drt_limit_flux fix when applied voltage (field_voltage) is 0
+  logical, public, protected :: ST_use_drt_fix_voltage_off = .false.
 
   !> Limit velocities to this value (m/s)
   real(dp), public, protected :: ST_max_velocity = -1.0_dp
@@ -339,6 +342,9 @@ contains
     case default
        error stop "Unknown prolong_density method"
     end select
+
+    call CFG_add_get(cfg, "use_drt_fix_voltage_off", ST_use_drt_fix_voltage_off, &
+     "Turn on the ST_drt_limit_flux fix when applied voltage (field_voltage) is 0")
 
     call CFG_add_get(cfg, "fixes%drt_limit_flux", ST_drt_limit_flux, &
          "Avoid dielectric relaxation time step constraint by limiting flux")

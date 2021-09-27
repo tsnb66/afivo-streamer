@@ -179,6 +179,15 @@ program streamer
   do it = 1, huge(1)-1
      if (ST_use_end_time .and. time >= ST_end_time) exit
 
+     ! If the applied voltage is 0. turn on the drt limit flux fix
+     if (ST_use_drt_fix_voltage_off) then
+      if (field_voltage == 0) then
+         ST_drt_limit_flux = .true.
+      else
+         ST_drt_limit_flux = .false.
+      end if
+     end if
+
      ! Turn off the applied field
      if (t_field_off >= 0 .and. time >= t_field_off) then
         call field_set_voltage_externally(0.0_dp)
