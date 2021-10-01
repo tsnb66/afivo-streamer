@@ -41,6 +41,7 @@ program streamer
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp)                  :: t_field_off = -1
   character(len=string_len) :: electron_bc = "standard"
+  real(dp)                  :: output_dt_interpulse_fac = 1.0
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -62,6 +63,9 @@ program streamer
   call CFG_add_get(cfg, "electron_bc", electron_bc, &
        "BC used for electron: standard (means using bc_species variable), dirichlet_custom, &
         neuman_custom.")
+
+  call CFG_add_get(cfg, "output_dt_interpulse_fac", output_dt_interpulse_fac, &
+   "Factor which is multiplied with output_dt resulting in an output_dt when applied voltage is 0.")
 
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
@@ -221,14 +225,32 @@ program streamer
      end if
 
      ! Every output_dt, write output
-     if (time + dt >= time_last_output + output_dt) then
-        write_out        = .true.
-        dt               = time_last_output + output_dt - time
-        time_last_output = time_last_output + output_dt
-        output_cnt       = output_cnt + 1
-     else
-        write_out = .false.
-     end if
+     if (field_voltage == 0) then
+         if (time + dt >= time_last_output + (output_dt_interpulse_fac * output_dt)) then
+            write_out        = .true.
+            dt               = time_last_output + (output_dt_interpulse_fac * output_dt) - time
+            time_last_output = time_last_output + (output_dt_interpulse_fac * output_dt)
+            output_cnt       = output_cnt + 1
+         else
+            write_out = .false.
+         end if
+      else if (time + dt >= time_last_output + output_dt) then
+         write_out        = .true.
+         dt               = time_last_output + output_dt - time
+         time_last_output = time_last_output + output_dt
+         output_cnt       = output_cnt + 1
+      else
+         write_out = .false.
+      end if
+
+     !if (time + dt >= time_last_output + output_dt) then
+     !   write_out        = .true.
+     !   dt               = time_last_output + output_dt - time
+     !   time_last_output = time_last_output + output_dt
+     !   output_cnt       = output_cnt + 1
+     !else
+     !   write_out = .false.
+     !end if
 
      evolve_electrons = .true.
      if (associated(user_evolve_electrons)) &
