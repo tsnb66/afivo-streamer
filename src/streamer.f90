@@ -39,13 +39,10 @@ program streamer
   real(dp)                  :: max_field, initial_streamer_pos
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
-<<<<<<< HEAD
   real(dp)                  :: t_field_off = -1
   character(len=string_len) :: electron_bc = "standard"
   real(dp)                  :: output_dt_interpulse_fac = 1.0
-=======
   real(dp)                  :: breakdown_field_Td
->>>>>>> fcdfcf32f56f992d62335f2093ca01f8c2375e90
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
