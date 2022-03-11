@@ -33,7 +33,7 @@ contains
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
-    real(dp)                   :: J_dot_E
+    real(dp)                   :: J_dot_E, Td
     !real(dp),parameter         :: gamma = 1.4_dp, gas_const = 8.314_dp
     real(dp)                   :: eta, eta_rt, eta_el, eta_vt
     eta_rt = 0.0_dp
@@ -42,6 +42,7 @@ contains
     eta = 1.0_dp
     nc = box%n_cell
     do KJI_DO(1, nc)
+      Td = box%cc(IJK, i_electric_fld)*SI_to_Townsend*gas_inverse_number_density
        ! Compute inner product flux * field over the cell faces
        J_dot_E = 0.5_dp * sum(box%fc(IJK, :, flux_elec) * box%fc(IJK, :, electric_fld))
 #if NDIM == 1
@@ -59,23 +60,25 @@ contains
 #endif
       if (effic_table_use) then
         call LT_lin_interp_list(rt_efficiency_field,rt_efficiency_val, &
-          box%cc(IJK, electric_fld), eta_rt)
+          Td, eta_rt)
         call LT_lin_interp_list(el_efficiency_field,el_efficiency_val, &
-        box%cc(IJK, electric_fld), eta_el)
+          Td, eta_el)
         call LT_lin_interp_list(vt_efficiency_field,vt_efficiency_val, &
-        box%cc(IJK, electric_fld), eta_vt)
+          Td, eta_vt)
         eta = eta_rt + 0.3_dp*eta_el
-        if (eta .ge. 1) error stop "Heating efficiency larger than 1"
+        box%cc(IJK, i_fast_heating) = eta
+        box%cc(IJK, i_slow_heating) = eta_vt
+        if ((eta+eta_vt) > 1.01_dp) error stop "Heating efficiency larger than 1"
       end if
       J_dot_E = J_dot_E * UC_elec_charge
-      box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
-      !   (0.5e9_dp*(box%cc(IJK, i_vibration_energy) - 1.0_dp))*dt_vec(1)
-        (eta_vt*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
-      !box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
-      !  (J_dot_E*(gamma-1)/(gamma*gas_const)) * dt_vec(1)
-       box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           (eta *  J_dot_E+ box%cc(IJK, i_vibration_energy)/t_vt) &
-            * dt_vec(1)
+      box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
+          (eta *  J_dot_E)* dt_vec(1)
+      if (slow_gas_heating) then
+        box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
+          (eta_vt*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
+        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
+            (box%cc(IJK, i_vibration_energy))* dt_vec(1)
+      end if
     end do; CLOSE_DO
   end subroutine add_heating_box
 
@@ -88,14 +91,26 @@ contains
 
   subroutine update_gas_density(box)
     type(box_t), intent(inout) :: box
-    integer                    :: nc
+    integer                    :: IJK, nc
     real(dp)                   :: inv_weight
 
     nc         = box%n_cell
     inv_weight = 1/gas_molecular_weight
+!    do KJI_DO(1,nc)
+!#if NDIM == 1
+!      box%cc(i, i_gas_dens) = &
+!        box%cc(i, gas_vars(i_rho)) * inv_weight
+!#elif NDIM == 2
+!      box%cc(i,j, i_gas_dens) = &
+!        box%cc(i, j, gas_vars(i_rho)) * inv_weight
+!#elif NDIM == 3
+!      box%cc(i,j,k, i_gas_dens) = &
+!        box%cc(i,j,k, gas_vars(i_rho)) * inv_weight
+!#endif
+!    end do;CLOSE_DO
 
     box%cc(DTIMES(1:nc), i_gas_dens) = &
-         box%cc(DTIMES(1:nc), gas_vars(i_rho)) * inv_weight
+        box%cc(DTIMES(1:nc), gas_vars(i_rho)) * inv_weight
   end subroutine update_gas_density
 
 end module m_coupling

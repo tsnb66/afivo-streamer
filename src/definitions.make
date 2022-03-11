@@ -60,6 +60,7 @@ m_fluid_lfa.o: m_photoi.mod
 m_fluid_lfa.o: m_streamer.mod
 m_fluid_lfa.o: m_transport_data.mod
 m_fluid_lfa.o: m_units_constants.mod
+m_gas.o: m_table_data.mod
 m_gas.o: m_config.mod
 m_gas.o: m_dt.mod
 m_gas.o: m_types.mod

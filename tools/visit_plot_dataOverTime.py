@@ -31,8 +31,7 @@ def get_argparser():
                     help='Start location of line (z=0 in 2D)')
     pr.add_argument('-r1', type=float, nargs=3, required=True,
                     metavar=('x1', 'y1', 'z1'),
-                    help='End location of line (z=0 in 2D)')
-                    required=True, help="End point of the line (x y z)")                
+                    help='End location of line (z=0 in 2D)')                
     pr.add_argument('-r', type=float, required = True,
                     help='Point to be sampled')
     pr.add_argument('-output', type=str, default='point',
