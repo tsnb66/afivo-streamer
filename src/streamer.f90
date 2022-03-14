@@ -1030,7 +1030,7 @@ subroutine outflow_custom(box, nb, iv, n_gc, cc)
        if (box%cc(IJK, i_lsf) < 0) then
           ! Set all species densities to zero
           box%cc(IJK, species_itree(n_gas_species+1:n_species)) = 0.0_dp
-          box%cc(IJK, gas_vars(i_rho)) = 0
+          !box%cc(IJK, gas_vars(i_rho)) = 0
 
 #if NDIM == 1
           lsf_nb = [box%cc(i-1, i_lsf), &
