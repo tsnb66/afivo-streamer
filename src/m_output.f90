@@ -274,7 +274,9 @@ contains
 
     if (output_conductivity) then
        n_extra_vars = n_extra_vars + 1
-       output_extra_vars(n_extra_vars) = "sigma"
+       output_extra_vars(n_extra_vars) = "sigma_elec"
+       n_extra_vars = n_extra_vars + 1
+       output_extra_vars(n_extra_vars) = "sigma_ion"
     end if
 
   end subroutine output_initialize
@@ -396,12 +398,14 @@ contains
   subroutine add_variables(box, new_vars, n_var)
     use m_gas
     use m_transport_data
+    use m_streamer
     type(box_t), intent(in) :: box
     integer, intent(in)     :: n_var
     real(dp)                :: new_vars(DTIMES(0:box%n_cell+1), n_var)
     integer                 :: n
     real(dp)                :: N_inv(DTIMES(0:box%n_cell+1))
     real(dp)                :: Td(DTIMES(0:box%n_cell+1))
+    integer                 :: i_ion
 
     if (.not. gas_constant_density) then
        N_inv = 1/box%cc(DTIMES(:), i_gas_dens)
@@ -416,10 +420,19 @@ contains
        case ("eV")
           ! Add electron energy in eV
           new_vars(DTIMES(:), n) = LT_get_col(eV_vs_fld, 1, Td)
-       case ("sigma")
+       case ("sigma_elec")
           ! Add plasma conductivity (e mu n_e)
           new_vars(DTIMES(:), n) = LT_get_col(td_tbl, td_mobility, Td) * &
                N_inv * box%cc(DTIMES(:), i_electron) * UC_elem_charge
+       case ("sigma_ion")
+          ! Ion motion contribution to conductivity
+          new_vars(DTIMES(:), n) = 0.0_dp
+          do i_ion=1,transport_data_ions%n_mobile_ions
+          new_vars(DTIMES(:), n) =  transport_data_ions%mobilities(i_ion) * &
+               box%cc(DTIMES(:), flux_species(1+i_ion)) 
+          end do
+          new_vars(DTIMES(:), n) = new_vars(DTIMES(:), n) * &
+               N_inv * UC_elem_charge
        case default
           error stop "Unknown variable"
        end select
