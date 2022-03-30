@@ -110,6 +110,6 @@ if __name__ == '__main__':
 
                 
 
-    np.savetxt(args.variable+'_integralOverVolume.txt',np.vstack([t_values, var_values]).T)
+    np.savetxt(args.variable+'_integralOverVolume_'+args.output+'.txt',np.vstack([t_values, var_values]).T)
     print('Saved {}'.format(args.output))
     sys.exit()

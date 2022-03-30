@@ -428,7 +428,8 @@ contains
           ! Ion motion contribution to conductivity
           new_vars(DTIMES(:), n) = 0.0_dp
           do i_ion=1,transport_data_ions%n_mobile_ions
-          new_vars(DTIMES(:), n) =  transport_data_ions%mobilities(i_ion) * &
+          new_vars(DTIMES(:), n) =  new_vars(DTIMES(:), n) + &
+                  abs(transport_data_ions%mobilities(i_ion)) * &
                box%cc(DTIMES(:), flux_species(1+i_ion)) 
           end do
           new_vars(DTIMES(:), n) = new_vars(DTIMES(:), n) * &
