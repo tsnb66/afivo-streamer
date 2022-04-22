@@ -109,6 +109,10 @@ module m_chemistry
 
   !> Reaction of the form c1 * exp(-(c2 /(kb * (Tg + Td/c3)))**c4)
   integer, parameter :: rate_analytic_k15 = 20
+  !> Reaction of the form c1 * Tg**c2*exp(-(c3 /(R*Tg))
+  integer, parameter :: rate_analytic_k16 = 21
+  !> Reaction of the form c1 * Te**c2*exp(-(c3 /(R*Te))
+  integer, parameter :: rate_analytic_k17 = 22
 
   !> Maximum number of species
   integer, parameter :: max_num_species      = 100
@@ -480,6 +484,7 @@ contains
     real(dp)              :: c0, c(rate_max_num_coeff)
     real(dp)              :: Te(n_cells)                 !> Electron Temperature in Kelvin
     logical               :: Te_available
+    real(dp), parameter    :: R = 8.14
 
     ! Conversion factor to go from eV to Kelvin
     real(dp), parameter   :: electron_eV_to_K = 2 * UC_elec_volt / &
@@ -546,6 +551,13 @@ contains
           ! Ti = T_gas + fields/c(3), with c(3) = 0.18 Td/Kelvin, UC_boltzmann_const is in J/Kelvin,
           ! c(2) is given in Joule in the input file
           rates(:, n) = c0 * c(1) * exp(-(c(2) / (UC_boltzmann_const * (gas_temperature + fields/c(3))))**c(4))
+       case (rate_analytic_k16)
+          rates(:, n) = c0 * c(1) * gas_temperature**c(2) * exp(-c(3) / (R*gas_temperature))
+       case (rate_analytic_k17)
+          if (.not. Te_available) then
+             Te = electron_eV_to_K * LT_get_col(td_tbl, td_energy_eV, fields)
+          end if
+          rates(:, n) = c0 * c(1) * Te**c(2) * exp(-c(3) / (R*Te))
       end select
     end do
   end subroutine get_rates
@@ -879,6 +891,14 @@ contains
           new_reaction%rate_type = rate_analytic_k15
           new_reaction%n_coeff = 4
           read(data_value(n), *) new_reaction%rate_data(1:4)
+       case ("c1*Tg**c2*exp(-c3/(R*Tg))")
+          new_reaction%rate_type = rate_analytic_k16
+          new_reaction%n_coeff = 3
+          read(data_value(n), *) new_reaction%rate_data(1:3)
+       case ("c1*Te**c2*exp(-c3/(R*Te))")
+          new_reaction%rate_type = rate_analytic_k17
+          new_reaction%n_coeff = 3
+          read(data_value(n), *) new_reaction%rate_data(1:3)
        case default
           print *, "Unknown rate type: ", trim(how_to_get(n))
           print *, "For reaction:      ", trim(reaction(n))
