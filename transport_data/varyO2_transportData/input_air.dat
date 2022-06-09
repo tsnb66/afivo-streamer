@@ -31,7 +31,7 @@ CONDITIONS
 1e-10     / Precision
 1e-4      / Convergence
 1000      / Maximum # of iterations
-0.8 0.2   / N2 and O2 fractions 
+0.98 0.02   / N2 and O2 fractions 
 1         / Normalize composition to unity: 0=No; 1=Yes
 
 
