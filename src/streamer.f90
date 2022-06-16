@@ -39,6 +39,9 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp)                  :: breakdown_field_Td
+  !Factor to multiply output dt during interpulse to avoid too many outputs
+  real(dp)                  :: output_dt_interpulse = 1.0_dp 
+
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -54,6 +57,8 @@ program streamer
        "If set, restart simulation from a previous .dat file")
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
+  call CFG_add_get(cfg, "output_dt_interpulse_factor", output_dt_interpulse, &
+       "Factor multiplied to output dt when voltage is 0 inbetween pulses.")
 
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
@@ -176,7 +181,17 @@ program streamer
      end if
 
      ! Every output_dt, write output
-     if (time + dt >= time_last_output + output_dt) then
+     if (current_voltage == 0.0) then
+             if (time + dt >= time_last_output + (output_dt_interpulse * &
+                     output_dt)) then
+                     write_out = .true.
+                     dt = time_last_output + (output_dt_interpulse *output_dt) - time
+                     time_last_output = time_last_output + (output_dt_interpulse *output_dt)
+                     output_cnt = output_cnt + 1
+             else 
+                     write_out = .false.
+             end if
+     else if (time + dt >= time_last_output + output_dt) then
         write_out        = .true.
         dt               = time_last_output + output_dt - time
         time_last_output = time_last_output + output_dt
