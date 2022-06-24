@@ -23,6 +23,9 @@ module m_field
   !> Linear rise time of field (s)
   real(dp) :: field_rise_time = 0.0_dp
 
+  !> Linear fall time of field (s)
+  real(dp) :: field_fall_time = 0.0_dp
+
   !> Pulse width excluding rise and fall time
   real(dp) :: field_pulse_width = huge(1.0_dp)
 
@@ -144,6 +147,8 @@ contains
     end select
 
     call CFG_add_get(cfg, "field_rise_time", field_rise_time, &
+         "Linear rise time of field (s)")
+    call CFG_add_get(cfg, "field_fall_time", field_fall_time, &
          "Linear rise time of field (s)")
     call CFG_add_get(cfg, "field_pulse_width", field_pulse_width, &
          "Pulse width excluding rise and fall time (s)")
@@ -501,9 +506,12 @@ contains
           else if (t < field_pulse_width + field_rise_time) then
              current_voltage = field_voltage
           else
-             tmp = t - (field_pulse_width + field_rise_time)
+             tmp = field_rise_time + field_pulse_width + field_fall_time - t
              current_voltage = field_voltage * max(0.0_dp, &
-                  (1 - tmp/field_rise_time))
+                     tmp/field_fall_time)
+             !tmp = t - (field_pulse_width + field_rise_time)
+             !current_voltage = field_voltage * max(0.0_dp, &
+             !     (1 - tmp/field_rise_time))
           end if
        end if
     case (tabulated_voltage)
