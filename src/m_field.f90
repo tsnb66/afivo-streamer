@@ -21,16 +21,16 @@ module m_field
   real(dp), allocatable :: field_table_values(:)
 
   !> Linear rise time of field (s)
-  real(dp) :: field_rise_time = 0.0_dp
+  real(dp), public, protected :: field_rise_time = 0.0_dp
 
   !> Pulse width excluding rise and fall time
-  real(dp) :: field_pulse_width = huge(1.0_dp)
+  real(dp), public, protected :: field_pulse_width = huge(1.0_dp)
 
   !> Number of voltage pulses
   integer :: field_num_pulses = 1
 
   !> Time of one complete voltage pulse
-  real(dp) :: field_pulse_period = huge(1.0_dp)
+  real(dp), public, protected :: field_pulse_period = huge(1.0_dp)
 
   !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = undefined_real

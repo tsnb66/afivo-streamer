@@ -41,6 +41,7 @@ program streamer
   real(dp)                  :: breakdown_field_Td
   !Factor to multiply output dt during interpulse to avoid too many outputs
   real(dp)                  :: output_dt_interpulse = 1.0_dp 
+  integer                   :: output_interpulse_num_outputs = int8
 
 
   !> The configuration for the simulation
@@ -57,15 +58,18 @@ program streamer
        "If set, restart simulation from a previous .dat file")
   call CFG_add_get(cfg, "memory_limit_GB", memory_limit_GB, &
        "Memory limit (GB)")
-  call CFG_add_get(cfg, "output_dt_interpulse_factor", output_dt_interpulse, &
-       "Factor multiplied to output dt when voltage is 0 inbetween pulses.")
+  call CFG_add_get(cfg, "output_interpulse_num_outputs", &
+       output_interpulse_num_outputs, &
+       "Number of .silo files to be output during the interpulse time (to limit large data generation)")
 
   call initialize_modules(cfg, tree, mg, restart_from_file /= undefined_str)
 
   call CFG_write(cfg, trim(output_name) // "_out.cfg", custom_first=.true.)
 
   call chemistry_get_breakdown_field(breakdown_field_Td, 1.0e3_dp)
-  write(*, '(A,E12.4)') " Estimated breakdown field (Td): ", breakdown_field_Td
+  write(*, '(A,2E12.4)') " Estimated breakdown field (Td): ", &
+   breakdown_field_Td, & 
+   breakdown_field_Td*Townsend_to_SI*gas_number_density
 
   ! Specify default methods for all the variables
   do i = n_gas_species+1, n_species
@@ -180,6 +184,9 @@ program streamer
         time_last_print = wc_time
      end if
 
+     output_dt_interpulse = (field_pulse_period- & 
+      (2*field_rise_time+field_pulse_width))  & 
+      /(output_interpulse_num_outputs*output_dt)
      ! Every output_dt, write output
      if (current_voltage == 0.0) then
              if (time + dt >= time_last_output + (output_dt_interpulse * &
