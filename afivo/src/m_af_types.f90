@@ -264,18 +264,18 @@ module m_af_types
      integer               :: stype = -1
      !> Whether to correct gradients for cylindrical coordinates
      logical               :: cylindrical_gradient = .false.
-     !> Stencil coefficients for constant stencil
+     !> Stencil coefficients for constant stencil, shape (n_coeff)
      real(dp), allocatable :: c(:)
-     !> Stencil coefficients for variable stencil
+     !> Stencil coefficients for variable stencil, shape (n_coeff, IJK)
      real(dp), allocatable :: v(:, DTIMES(:))
      !> Optional extra scalar, for example to map boundary conditions to
-     !> right-hand side
+     !> right-hand side, shape (IJK)
      real(dp), allocatable :: f(DTIMES(:))
-     !> Correction for boundary conditions
+     !> Correction for boundary conditions, shape (IJK)
      real(dp), allocatable :: bc_correction(DTIMES(:))
-     !> Indices of sparse coefficients
+     !> Indices of sparse coefficients, shape(NDIM, n)
      integer, allocatable  :: sparse_ix(:, :)
-     !> Values of sparse coefficients
+     !> Values of sparse coefficients, shape(n_coeff, n)
      real(dp), allocatable :: sparse_v(:, :)
   end type stencil_t
 
@@ -607,6 +607,9 @@ module m_af_types
 
      !> Minimum relative distance to boundaries (to avoid division by zero)
      real(dp) :: lsf_min_rel_distance = 1e-4_dp
+
+     !> Whether to use a custom prolongation stencil
+     logical :: lsf_use_custom_prolongation = .false.
 
      !> Level-set function
      procedure(mg_func_lsf), pointer, nopass :: lsf => null()
