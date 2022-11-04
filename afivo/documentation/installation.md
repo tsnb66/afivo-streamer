@@ -4,7 +4,7 @@
 
 If you have `git` installed, you can download a copy of the repository with:
 
-    $ git clone https://gitlab.com/MD-CWI-NL/afivo.git
+    $ git clone https://github.com/MD-CWI/afivo.git
 
 To update the local copy, use the command
 
@@ -12,8 +12,14 @@ To update the local copy, use the command
 
 in the `afivo` directory. You can also download
 a
-[zip file with the latest version](https://gitlab.com/MD-CWI-NL/afivo/repository/archive.zip?ref=master),
+[zip file with the latest version](https://github.com/MD-CWI/afivo/repository/archive.zip?ref=master),
 but then it harder to update.
+
+# Requirements
+
+* A Linux/Unix system
+* A recent Fortran compiler (gfortran >= 5 is recommended)
+* C/C++ compiler for compiling Silo (gcc is recommended, also see below).
 
 # Compiling
 
@@ -34,13 +40,8 @@ command
 
     $ make COMPILER=ifort
 
-# Requirements
+# Dependencies
 
-* Fortran 2008 compatible compiler (gfortran >= 4.8 has been tested)
-* C/C++ compiler for compiling Silo (see below).
-
-Afivo has one dependency: Silo. The script `external_libraries/build_silo.sh`
-automatically downloads, configures and compiles Silo into your Afivo directory.
-If this fails, then you should probably download, configure and install Silo
-yourself. If you really do not want to use Silo (Afivo also supports .vtu
-output), you could remove the Silo routines.
+Afivo has two dependencies: Silo and Hypre. The scripts in `external_libraries/`
+automatically download, configure and compile these libraries into your Afivo directory.
+If this fails, some known issues and solutions can be found at https://teunissen.net/afivo_streamer/md_documentation_installation.html

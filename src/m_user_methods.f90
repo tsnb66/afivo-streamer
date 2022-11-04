@@ -7,6 +7,7 @@ module m_user_methods
   implicit none
   public
 
+  !< [method_list]
   !> User-defined refinement routine
   procedure(af_subr_ref), pointer :: user_refine => null()
 
@@ -31,9 +32,17 @@ module m_user_methods
   !> To add entries to the log file
   procedure(log_vars), pointer :: user_log_variables => null()
 
+  !> Custom level-set function
+  procedure(mg_func_lsf), pointer :: user_lsf => null()
+
+  !> Function to get boundary value for level set function
+  procedure(mg_func_lsf), pointer :: user_lsf_bc => null()
+  !< [method_list]
+
   integer, parameter :: user_max_log_vars = 20
 
   interface
+     !< [interface_list]
      subroutine log_subr(tree, filename, out_cnt)
        import
        type(af_t), intent(in)      :: tree
@@ -74,6 +83,7 @@ module m_user_methods
        type(af_t), intent(in) :: tree
        real(dp), intent(in)   :: time
      end subroutine generic_subr
+     !< [interface_list]
   end interface
 
 end module m_user_methods

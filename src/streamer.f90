@@ -39,6 +39,7 @@ program streamer
   type(af_loc_t)            :: loc_field, loc_field_initial
   real(dp), dimension(NDIM) :: loc_field_coord, loc_field_initial_coord
   real(dp)                  :: breakdown_field_Td, current_output_dt
+  logical                   :: step_accepted
 
   !> The configuration for the simulation
   type(CFG_t) :: cfg
@@ -187,13 +188,10 @@ program streamer
      end if
 
      ! Every output_dt, write output
-     if (time + dt >= time_last_output + current_output_dt) then
-        write_out        = .true.
-        dt               = time_last_output + current_output_dt - time
-        time_last_output = time_last_output + current_output_dt
-        output_cnt       = output_cnt + 1
-     else
-        write_out = .false.
+     write_out = (time + dt >= time_last_output + current_output_dt)
+     if (write_out) then
+        ! Ensure that dt is non-negative, even when current_output_dt changes
+        dt = max(0.0_dp, time_last_output + current_output_dt - time)
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
@@ -205,9 +203,35 @@ program streamer
         call set_electrode_densities(tree)
      end if
 
-     call af_advance(tree, dt, dt_lim, time, &
-          species_itree(n_gas_species+1:n_species), &
-          time_integrator, forward_euler)
+     ! Advance over dt, but make a copy first so that we can try again if dt was too large
+     step_accepted = .false.
+     do while (.not. step_accepted)
+        call copy_current_state()
+
+        call af_advance(tree, dt, dt_lim, time, &
+             species_itree(n_gas_species+1:n_species), &
+             time_integrator, forward_euler)
+
+        ! Check if dt was small enough for the new state
+        step_accepted = (dt < dt_lim)
+
+        if (.not. step_accepted) then
+           write(*, "(A,E12.4,A,E12.4,A,E12.4,A)") "Step rejected (time =", &
+                time, ", dt =", dt, ", dt_lim =", dt_lim, ")"
+
+           ! Go back to previous state and try with a smaller dt
+           dt = dt_safety_factor * dt_lim
+           time = global_time
+           write_out = .false. ! Since we advance less far in time
+           call restore_previous_state()
+        end if
+     end do
+
+     ! Update global variable based on current space-integrated data
+     ST_global_rates = ST_global_rates + &
+          sum(ST_current_rates(1:n_reactions, :), dim=2) * dt
+     ST_global_JdotE = ST_global_JdotE + &
+          sum(ST_current_JdotE(1, :)) * dt
 
      ! Make sure field is available for latest time state
      call field_compute(tree, mg, 0, time, .true.)
@@ -226,7 +250,7 @@ program streamer
      end if
 
      ! dt is modified when writing output, global_dt not
-     dt          = min(dt_lim, dt_gas_lim)
+     dt          = min(2 * global_dt, dt_safety_factor * min(dt_lim, dt_gas_lim))
      global_dt   = dt
      global_time = time
 
@@ -235,13 +259,12 @@ program streamer
              ") getting too small"
         print *, "See the documentation on time integration"
         call output_status(tree, time, wc_time, it, dt)
-        if (.not. write_out) then
-           write_out = .true.
-           output_cnt = output_cnt + 1
-        end if
+        write_out = .true.
      end if
 
      if (write_out) then
+        output_cnt       = output_cnt + 1
+        time_last_output = global_time
         call output_write(tree, output_cnt, wc_time, write_sim_data)
      end if
 
@@ -333,8 +356,9 @@ contains
     call mg_init(tree, mg)
 
     if (ST_use_dielectric) then
-       ! To store surface charge and the photon flux
-       n_surface_variables = af_advance_num_steps(time_integrator) + 1
+       ! To store the photon flux (single state), surface charge (multiple
+       ! states) and a copy of the surface charge
+       n_surface_variables = af_advance_num_steps(time_integrator) + 2
        call surface_initialize(tree, i_eps, diel, n_surface_variables)
     end if
 
@@ -379,8 +403,8 @@ contains
     write(my_unit) photoi_prev_time
     write(my_unit) global_dt
 
-    write(my_unit) sum(ST_global_rates(1:n_reactions, :), dim=2)
-    write(my_unit) sum(ST_global_JdotE(1, :))
+    write(my_unit) ST_global_rates
+    write(my_unit) ST_global_JdotE
   end subroutine write_sim_data
 
   subroutine read_sim_data(my_unit)
@@ -394,8 +418,8 @@ contains
     read(my_unit) global_dt
 
     ! Data is stored in location of first thread
-    read(my_unit) ST_global_rates(1:n_reactions, 1)
-    read(my_unit) ST_global_JdotE(1, 1)
+    read(my_unit) ST_global_rates
+    read(my_unit) ST_global_JdotE
 
     dt = global_dt
   end subroutine read_sim_data
@@ -478,5 +502,39 @@ contains
        end if
     end do; CLOSE_DO
   end subroutine electrode_species_bc
+
+  !> Copy current state for densities and field
+  subroutine copy_current_state()
+    integer :: n_states
+
+    n_states = af_advance_num_steps(time_integrator)
+    call af_tree_copy_ccs(tree, species_itree(n_gas_species+1:n_species), &
+         species_itree(n_gas_species+1:n_species) + n_states)
+
+    ! Copy potential
+    call af_tree_copy_cc(tree, i_phi, i_phi+1)
+
+    if (ST_use_dielectric) then
+       call surface_copy_variable(diel, i_surf_dens, i_surf_dens+n_states)
+    end if
+  end subroutine copy_current_state
+
+  !> Restore state for densities and field
+  subroutine restore_previous_state()
+    integer :: n_states
+
+    n_states = af_advance_num_steps(time_integrator)
+
+    call af_tree_copy_ccs(tree, species_itree(n_gas_species+1:n_species) + n_states, &
+         species_itree(n_gas_species+1:n_species))
+
+    ! Copy potential and compute field again
+    call af_tree_copy_cc(tree, i_phi+1, i_phi)
+    call field_from_potential(tree, mg)
+
+    if (ST_use_dielectric) then
+       call surface_copy_variable(diel, i_surf_dens+n_states, i_surf_dens )
+    end if
+  end subroutine restore_previous_state
 
 end program streamer

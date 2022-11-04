@@ -273,7 +273,7 @@ contains
 
     do n = n_gas_species+1, n_species
        call af_add_cc_variable(tree, trim(species_list(n)), &
-            n_copies=af_advance_num_steps(time_integrator), &
+            n_copies=af_advance_num_steps(time_integrator)+1, &
             ix=species_itree(n))
     end do
 
@@ -356,6 +356,8 @@ contains
     if (gas_constant_density) then
        i_elec = species_index("e")
        n_fields = td_tbl%n_points
+
+       if (n_fields < 3) error stop "Not enough data for linear extrapolation"
 
        allocate(fields(n_fields))
        fields = td_tbl%x
