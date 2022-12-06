@@ -106,6 +106,7 @@ if __name__ == '__main__':
         t_values[it] = v.GetQueryOutputValue()
         var_values[it] = results[0]
         it = it+1
+        v.DeleteAllPlots()
 
                 
 
