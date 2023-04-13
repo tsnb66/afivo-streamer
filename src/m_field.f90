@@ -158,13 +158,13 @@ contains
     call CFG_add_get(cfg, "field_pulse_period", field_pulse_period, &
          "Time of one complete voltage pulse (s)")
 
-    if (field_pulse_width < huge(1.0_dp) .and. field_rise_time <= 0) &
+    if (field_pulse_width < huge_real .and. field_rise_time <= 0) &
          error stop "Set field_rise_time when using field_pulse_width"
 
     if (field_num_pulses > 1) then
-       if (field_pulse_period >= huge(1.0_dp)) &
+       if (field_pulse_period >= huge_real) &
             error stop "field_num_pulses > 1 requires field_pulse_period"
-       if (field_pulse_width >= huge(1.0_dp)) &
+       if (field_pulse_width >= huge_real) &
             error stop "field_num_pulses > 1 requires field_pulse_width"
        if (field_pulse_width + 2 * field_rise_time > field_pulse_period) &
             error stop "field_pulse_period shorter than one full pulse"
@@ -312,6 +312,14 @@ contains
                   tree%boxes(id)%cc(DTIMES(:), i_rhs) + &
                   q * tree%boxes(id)%cc(DTIMES(:), ix)
           end do
+
+          if (ST_use_electrode) then
+             ! Ignore charge inside electrode (which could be present to due
+             ! boundary conditions and refinement)
+             where (tree%boxes(id)%cc(DTIMES(:), i_lsf) <= 0)
+                tree%boxes(id)%cc(DTIMES(:), i_rhs) = 0.0_dp
+             end where
+          end if
        end do
        !$omp end do nowait
     end do

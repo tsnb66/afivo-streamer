@@ -225,8 +225,8 @@ program streamer
         step_accepted = (dt <= dt_lim)
 
         if (.not. step_accepted) then
-           print *, "Step rejected (dt > dt_lim)"
-           call output_status(tree, time, wc_time, it, dt)
+           write (*, "(I0,A,2E12.4)") it, " Step rejected, (dt, dt_lim) = ", &
+                dt, dt_lim
 
            ! Go back to previous state and try with a smaller dt
            dt = dt_safety_factor * dt_lim
@@ -275,6 +275,9 @@ program streamer
         output_cnt       = output_cnt + 1
         time_last_output = global_time
         call output_write(tree, output_cnt, wc_time, write_sim_data)
+        if (ST_use_dielectric .and. surface_output) then
+           call output_surface_write(tree, output_cnt)
+        end if
      end if
 
      if (global_dt < dt_min) error stop "dt too small"
@@ -505,8 +508,6 @@ contains
              ! Set electron density to average of outside neighbors
              box%cc(IJK, i_electron) = sum(dens_nb, mask=(lsf_nb > 0)) / &
                   count(lsf_nb > 0)
-             ! Set first positive ion density for charge neutrality
-             box%cc(IJK, i_1pos_ion) = box%cc(IJK, i_electron)
           end if
        end if
     end do; CLOSE_DO

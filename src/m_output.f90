@@ -14,9 +14,6 @@ module m_output
   ! Name for the output files
   character(len=string_len), public, protected :: output_name = "output/my_sim"
 
-  ! Optional variable (to show ionization source term)
-  integer, public, protected :: i_src = -1 ! Source term
-
   ! If defined, only output these variables
   character(len=af_nlen), allocatable :: output_only(:)
 
@@ -122,6 +119,7 @@ module m_output
   public :: output_write
   public :: output_log
   public :: output_status
+  public :: output_surface_write
 
 contains
 
@@ -171,11 +169,6 @@ contains
          "Write to a log file for regression testing")
     call CFG_add_get(cfg, "output%density_threshold", density_threshold, &
          "Electron density threshold (1/m3, will be scaled by N)")
-
-    if (output_src_term) then
-       call af_add_cc_variable(tree, "src", ix=i_src)
-       call af_set_cc_methods(tree, i_src, af_bc_neumann_zero, af_gc_interp)
-    end if
 
     tmp = 1/output_src_decay_rate
     call CFG_add_get(cfg, "output%src_decay_time", tmp, &
@@ -278,11 +271,12 @@ contains
        output_extra_vars(n_extra_vars) = "sigma"
     end if
 
-    call CFG_add(cfg, "output%write_derivatives", empty_names, &
-         "Write derivatives of these species to output", dynamic_size=.true.)
-    call CFG_get_size(cfg, "output%write_derivatives", n)
+    call CFG_add(cfg, "output%write_source", empty_names, &
+         "Write chemistry source terms of these species to output", &
+         dynamic_size=.true.)
+    call CFG_get_size(cfg, "output%write_source", n)
     allocate(varname(n))
-    call CFG_get(cfg, "output%write_derivatives", varname)
+    call CFG_get(cfg, "output%write_source", varname)
 
     do i = 1, n
        n_extra_vars = n_extra_vars + 1
@@ -464,6 +458,7 @@ contains
              have_derivs = .true.
           end if
 
+          ! Trim "src_" from the name
           species_name = trim(output_extra_vars(n)(5:))
           i_species = species_index(species_name)
 
@@ -484,6 +479,7 @@ contains
     use m_chemistry
     use m_analysis
     use m_dielectric
+    use m_dt
     type(af_t), intent(in)       :: tree
     character(len=*), intent(in) :: filename
     integer, intent(in)          :: out_cnt !< Output number
@@ -570,16 +566,18 @@ contains
 #if NDIM == 1
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x max(n_e) x voltage ne_zmin ne_zmax &
-            &max(Etip) x wc_time n_cells min(dx) &
+            &max(Etip) x wc_time n_cells min(dx) dt_cfl dt_diff dt_drt dt_chem &
             &highest(lvl)"
 #elif NDIM == 2
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y max(n_e) x y max(E_r) x y min(E_r) voltage &
-            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) highest(lvl)"
+            &ne_zmin ne_zmax max(Etip) x y wc_time n_cells min(dx) &
+            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #elif NDIM == 3
        write(my_unit, "(A)", advance="no") "it time dt v sum(n_e) sum(n_i) &
             &sum(charge) sum(J.E) max(E) x y z max(n_e) x y z voltage &
-            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) highest(lvl)"
+            &ne_zmin ne_zmax max(Etip) x y z wc_time n_cells min(dx) &
+            &dt_cfl dt_diff dt_drt dt_chem highest(lvl)"
 #endif
        if (associated(user_log_variables)) then
           do i = 1, n_user_vars
@@ -602,10 +600,10 @@ contains
 #endif
 
     if (associated(user_log_variables)) then
-       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3,", &
+       write(fmt, "(A,I0,A,I0,A)") "(I6,", n_reals, "E20.8,I12,5E20.8,I3,", &
             n_user_vars, "E20.8)"
     else
-       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,1E20.8,I3)"
+       write(fmt, "(A,I0,A)") "(I6,", n_reals, "E20.8,I12,5E20.8,I3)"
     end if
 
     velocity = norm2(af_r_loc(tree, loc_field) - prev_pos) / output_dt
@@ -620,15 +618,16 @@ contains
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl, &
-         var_values(1:n_user_vars)
+         af_min_dr(tree), minval(dt_matrix(1:dt_num_cond, :), dim=2), &
+         tree%highest_lvl, var_values(1:n_user_vars)
 #elif NDIM == 2
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
          sum_pos_ion, sum_elem_charge, ST_global_JdotE, &
          max_field, af_r_loc(tree, loc_field), max_elec, &
          af_r_loc(tree, loc_elec), max_Er, af_r_loc(tree, loc_Er), min_Er, &
          current_voltage, ne_zminmax, max_field_tip, r_tip, &
-         wc_time, af_num_cells_used(tree), af_min_dr(tree),tree%highest_lvl, &
+         wc_time, af_num_cells_used(tree), af_min_dr(tree), &
+         minval(dt_matrix(1:dt_num_cond, :), dim=2), tree%highest_lvl, &
          var_values(1:n_user_vars)
 #elif NDIM == 3
     write(my_unit, fmt) out_cnt, global_time, dt, velocity, sum_elec, &
@@ -637,8 +636,8 @@ contains
          af_r_loc(tree, loc_elec), current_voltage, ne_zminmax, &
          max_field_tip, r_tip, &
          wc_time, af_num_cells_used(tree), &
-         af_min_dr(tree),tree%highest_lvl, &
-         var_values(1:n_user_vars)
+         af_min_dr(tree), minval(dt_matrix(1:dt_num_cond, :), dim=2), &
+         tree%highest_lvl, var_values(1:n_user_vars)
 #endif
     close(my_unit)
 
@@ -841,6 +840,72 @@ contains
          minval(dt_matrix(1:dt_num_cond, :), dim=2), &
          " (cfl diff drt chem)"
   end subroutine output_status
+
+  !> Write surface quantities to a separate output file
+  subroutine output_surface_write(tree, output_cnt)
+    use m_npy
+    use m_dielectric
+    type(af_t), intent(inout)    :: tree
+    integer, intent(in)          :: output_cnt
+    integer                      :: n, i, ix, nc
+    integer                      :: lo(NDIM-1), hi(NDIM-1)
+    character(len=string_len)    :: tmpname, filename
+
+    real(dp)              :: coords(NDIM, tree%n_cell**(NDIM-1))
+    real(dp), allocatable :: r(:, :), dr(:, :)
+    real(dp), allocatable :: photon_flux(:), surf_dens(:)
+    integer, allocatable  :: surf_dim(:)
+
+    nc = diel%n_cell
+    n = count(diel%surfaces(1:diel%max_ix)%in_use)
+    allocate(r(NDIM, n*nc), photon_flux(n*nc), surf_dens(n*nc))
+    allocate(dr(NDIM-1, n), surf_dim(n))
+
+    write(filename, "(A,I6.6,A)") trim(output_name) // "_", &
+         output_cnt, "_surface.npz"
+    write(tmpname, "(A,I6.6,A)") trim(output_name) // "_", &
+         output_cnt, "_tmp.npy"
+
+    i = 0
+    do ix = 1, diel%max_ix
+       if (diel%surfaces(ix)%in_use) then
+          i = i + 1
+          lo = (i-1) * nc + 1
+          hi = i * nc
+
+          associate(box => tree%boxes(diel%surfaces(ix)%id_out), &
+               surf => diel%surfaces(ix))
+            call af_get_face_coords(box, surf%direction, coords)
+#if NDIM == 2
+            r(:, lo(1):hi(1)) = coords
+            dr(:, i) = surf%dr
+            surf_dim(i) = af_neighb_dim(surf%direction)
+            photon_flux(lo(1):hi(1)) = surf%sd(:, i_photon_flux)
+            surf_dens(lo(1):hi(1)) = surf%sd(:, i_surf_dens)
+#elif NDIM == 3
+            error stop "not implemented"
+#endif
+          end associate
+       end if
+    end do
+
+    call save_npy(tmpname, [n])
+    call add_to_zip(filename, tmpname, .false., "n_surfaces")
+    call save_npy(tmpname, [nc])
+    call add_to_zip(filename, tmpname, .false., "n_cell")
+    call save_npy(tmpname, r)
+    call add_to_zip(filename, tmpname, .false., "r")
+    call save_npy(tmpname, dr)
+    call add_to_zip(filename, tmpname, .false., "dr")
+    call save_npy(tmpname, photon_flux)
+    call add_to_zip(filename, tmpname, .false., "photon_flux")
+    call save_npy(tmpname, surf_dens)
+    call add_to_zip(filename, tmpname, .false., "surf_dens")
+    call save_npy(tmpname, surf_dim)
+    call add_to_zip(filename, tmpname, .false., "normal_dim")
+    print *, "output_surface_write: written " // trim(filename)
+
+  end subroutine output_surface_write
 
   subroutine output_fld_maxima(tree, filename)
     use m_analysis
