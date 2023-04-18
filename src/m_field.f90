@@ -33,7 +33,7 @@ module m_field
   integer :: field_num_pulses = 1
 
   !> Time of one complete voltage pulse
-  real(dp), public, protected :: field_pulse_period = huge(1.0_dp)
+  real(dp), public, protected :: field_pulse_period = huge_real
 
   !> The (initial) vertical applied electric field
   real(dp) :: field_amplitude = undefined_real
