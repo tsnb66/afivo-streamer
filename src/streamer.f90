@@ -189,7 +189,7 @@ program streamer
         time_last_print = wc_time
      end if
 
-     time_until_next_pulse = field_pulse_period - modulo(time, field_pulse_period)
+     time_until_next_pulse = field_pulse_period - 0.5*modulo(time, field_pulse_period)
 
      if (abs(current_voltage) > 0.0_dp .or. &
           time_until_next_pulse < refine_prepulse_time) then
