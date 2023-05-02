@@ -12,6 +12,7 @@ module m_coupling
 
   public :: coupling_add_fluid_source
   public :: coupling_update_gas_density
+  public :: compute_rho_dot
 
 contains
 
@@ -52,6 +53,24 @@ contains
     end do; CLOSE_DO
   end subroutine add_heating_box
 
+  subroutine compute_rho_dot(tree, dt)
+    type(af_t), intent(inout) :: tree
+    real(dp), intent(in)      :: dt
+
+    call af_loop_box_arg(tree, compute_rho, [dt], .true.)
+  end subroutine compute_rho_dot
+  subroutine compute_rho(box, dt_vec)
+    use m_units_constants
+    type(box_t), intent(inout) :: box
+    real(dp), intent(in)       :: dt_vec(:)
+    integer                    :: IJK, nc
+    real(dp), parameter       :: fac = -UC_eps0/UC_elem_charge 
+
+    nc = box%n_cell
+    do KJI_DO(1, nc)
+       box%cc(IJK, i_rho_dot) = fac*(box%cc(IJK, i_rhs) - box%cc(IJK, i_rhs-1))/dt_vec(1)
+    end do; CLOSE_DO
+  end subroutine compute_rho
   !> Update gas number density in the fluid model
   subroutine coupling_update_gas_density(tree)
     type(af_t), intent(inout) :: tree

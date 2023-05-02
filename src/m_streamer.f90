@@ -28,6 +28,8 @@ module m_streamer
   integer, public, protected :: i_electric_fld = -1
   !> Index of source term Poisson
   integer, public, protected :: i_rhs          = -1
+  !> Index of charge derivative
+  integer, public, protected :: i_rho_dot      = -1
   !> Index of temporary variable
   integer, public, protected :: i_tmp          = -1
   !> Index can be set to include a dielectric
@@ -251,6 +253,7 @@ contains
     call af_add_cc_variable(tree, "phi", ix=i_phi, n_copies=2)
     call af_add_cc_variable(tree, "electric_fld", ix=i_electric_fld)
     call af_add_cc_variable(tree, "rhs", ix=i_rhs)
+    call af_add_cc_variable(tree, "rho_dot", ix=i_rho_dot, n_copies=2)
     call af_add_cc_variable(tree, "tmp", write_out=.false., &
          write_binary=.false., ix=i_tmp)
 
@@ -289,9 +292,7 @@ contains
     call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
          "Whether to compute the deposited power density")
 
-    if (compute_power_density) then
-       call af_add_cc_variable(tree, "power_density", ix = i_power_density)
-    end if
+    call af_add_cc_variable(tree, "power_density", ix = i_power_density)
 
     call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
          "Whether the length of the streamer is used to end the simulation")

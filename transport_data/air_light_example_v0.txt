@@ -17,7 +17,9 @@ e + N2 -> e + N2_C3,field_table,C10 N2 Excitation 11.03 eV
 N2_C3 + N2 -> N2 + N2,c1,0.13e-16
 N2_C3 + O2 -> N2 + O2,c1,3.0e-16
 # Radiative lifetime is 42 ns
-N2_C3 -> N2_B3,c1,2.381e7
+N2_C3 -> N2_B3 + lightlego,c1,2.381e7
+# Detachment -- test by hema to add additional N2B consuming reaction -- 16-2-2023
+O- + N2_B3 -> e + N2 + O(^3P),c1,1.9e-09,cm
 -----------------------
 
 Mean energy (eV)
