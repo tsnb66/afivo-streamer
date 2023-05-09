@@ -46,9 +46,14 @@ module m_gas
 
   ! Gas mean molecular weight (kg)
   real(dp), public, protected :: gas_molecular_weight = 28.8_dp * UC_atomic_mass
+  !> Vibration-Translation relaxation time
+  real(dp), public, protected :: t_vt = 20e-6_dp
 
   ! Joule heating efficiency
-  real(dp), public, protected :: gas_heating_efficiency  = 1.0_dp
+  real(dp), public, protected :: fast_heating_efficiency  = 1.0_dp
+
+  ! Slow Joule heating efficiency
+  real(dp), public, protected :: slow_heating_efficiency  = 1.0_dp
 
   ! Ratio of heat capacities (polytropic index)
   real(dp), public, protected :: gas_euler_gamma = 1.4_dp
@@ -64,6 +69,8 @@ module m_gas
   ! Indices of the Euler fluxes
   integer, public, protected :: gas_fluxes(n_vars_euler) = -1
 
+  ! Index of slow heating term
+  integer, public, protected :: i_vibration_energy = -1
   ! Names of the Euler variables
   character(len=name_len), public, protected :: gas_var_names(n_vars_euler)
 
@@ -127,6 +134,12 @@ contains
 #endif
        call af_add_cc_variable(tree, "pressure", ix=gas_prim_vars(i_e))
        call af_add_cc_variable(tree, "temperature", ix=gas_prim_vars(i_e+1))
+
+       ! HEMATODO: Move this elesehwere later so that 
+       ! it is created only when using the detailed model of heating
+       call af_add_cc_variable(tree, "vibrational_energy", ix = i_vibration_energy)
+
+       call CFG_add_get(cfg, "gas%tau_vt", t_vt, "Vibration-Translation relaxation time (default=20e-6 sec)")
     else if (associated(user_gas_density)) then
        gas_constant_density = .false.
        call af_add_cc_variable(tree, "M", ix=i_gas_dens)
@@ -140,8 +153,11 @@ contains
          "The gas temperature (Kelvin)")
     call CFG_add_get(cfg, "gas%molecular_weight", gas_molecular_weight, &
          "Gas mean molecular weight (kg), for gas dynamics")
-    call CFG_add_get(cfg, "gas%heating_efficiency", gas_heating_efficiency, &
-         "Joule heating efficiency (between 0.0 and 1.0)")
+    call CFG_add_get(cfg, "gas%fast_heating_efficiency", fast_heating_efficiency, &
+         "Fast Joule heating efficiency (between 0.0 and 1.0)")
+
+    call CFG_add_get(cfg, "gas%slow_heating_efficiency", slow_heating_efficiency, &
+         " Slow Joule heating efficiency (between 0.0 and 1.0 with 1-fast_heating_efficency)")
 
     ! Ideal gas law
     gas_number_density = 1e5_dp * gas_pressure / &

@@ -48,8 +48,10 @@ contains
             box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
 #endif
 
+      box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
+        (slow_heating_efficiency*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           gas_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
+           fast_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
     end do; CLOSE_DO
   end subroutine add_heating_box
 
