@@ -28,32 +28,38 @@ contains
     type(CFG_t), intent(inout) :: cfg
     type(af_t), intent(inout)  :: tree
     character(len=100)         :: gradient_type
+    logical                    :: use_gradient = .false.
 
-    gradient_type = "line"
-    call CFG_add_get(cfg, "gradient_type", gradient_type, &
-         "What type of gas gradient to use (line, sphere)")
+    user_log_variables => gas_heating_postProc
+    call CFG_add_get(cfg, "use_gradient", use_gradient, &
+      "Whether to use a gas density gradient")
+    if (use_gradient) then
+      gradient_type = "line"
+      call CFG_add_get(cfg, "gradient_type", gradient_type, &
+           "What type of gas gradient to use (line, sphere)")
 
-    select case (gradient_type)
-    case ("line")
-       user_gas_density => gas_density_line
-    case ("sphere")
-       user_gas_density => gas_density_sphere
-    case default
-       error stop "Unknown gradient_type"
-    end select
+      select case (gradient_type)
+      case ("line")
+         user_gas_density => gas_density_line
+      case ("sphere")
+         user_gas_density => gas_density_sphere
+      case default
+         error stop "Unknown gradient_type"
+      end select
 
-    call CFG_add_get(cfg, "density_ratio", density_ratio, &
-         "Density ratio (<= 1)")
-    call CFG_add_get(cfg, "shock_width", shock_width, &
-         "Shock width (relative to domain size)")
-    call CFG_add_get(cfg, "line_coeff", line_coeff, &
-         "Coefficients a, b, c of a line a + bx + cy = 0")
-    call CFG_add_get(cfg, "sphere_center", sphere_center, &
-         "Center (relative to domain) of sphere")
-    call CFG_add_get(cfg, "sphere_radius", sphere_radius, &
-         "Radius (relative to domain) of sphere")
-    call CFG_add_get(cfg, "density_ratio_inside_sphere", density_ratio_inside_sphere, &
-         "Whether density ratio is inside sphere")
+      call CFG_add_get(cfg, "density_ratio", density_ratio, &
+           "Density ratio (<= 1)")
+      call CFG_add_get(cfg, "shock_width", shock_width, &
+           "Shock width (relative to domain size)")
+      call CFG_add_get(cfg, "line_coeff", line_coeff, &
+           "Coefficients a, b, c of a line a + bx + cy = 0")
+      call CFG_add_get(cfg, "sphere_center", sphere_center, &
+           "Center (relative to domain) of sphere")
+      call CFG_add_get(cfg, "sphere_radius", sphere_radius, &
+           "Radius (relative to domain) of sphere")
+      call CFG_add_get(cfg, "density_ratio_inside_sphere", density_ratio_inside_sphere, &
+           "Whether density ratio is inside sphere")
+    end if
          
   end subroutine user_initialize
 
@@ -109,5 +115,37 @@ contains
        gas_density_sphere = gas_number_density * (1 + (density_ratio-1) * tmp)
     end if
   end function gas_density_sphere
+
+  subroutine gas_heating_postProc(tree, n_vars, var_names, var_values)
+       use m_streamer
+       use m_gas
+       type(af_t), intent(in)                 :: tree
+       integer, intent(out)                   :: n_vars
+       character(len=name_len), intent(inout) :: var_names(user_max_log_vars)
+       real(dp), intent(inout)                :: var_values(user_max_log_vars)
+       real(dp)                               :: r(2)
+       type(af_loc_t)                         :: loc_maxtemp
+       type(af_loc_t)                         :: loc_maxpowerdens
+
+
+       n_vars = 7
+       var_names(1) = 'average_temperature'
+       var_names(2) = 'x'
+       var_names(3) = 'y'
+       var_names(4) = 'max_temperature'
+       var_names(5) = 'x'
+       var_names(6) = 'y'
+       var_names(7) = 'max_power_density'
+
+       call af_tree_sum_cc(tree, gas_prim_vars(i_e+1), var_values(1))
+       call af_tree_max_cc(tree, gas_prim_vars(i_e+1), var_values(4), loc_maxtemp)
+       r= af_r_loc(tree, loc_maxtemp)
+       var_values(2) = r(1)
+       var_values(3) = r(2)
+       call af_tree_max_cc(tree, i_power_density, var_values(7), loc_maxpowerdens)
+       r= af_r_loc(tree, loc_maxpowerdens)
+       var_values(5) = r(1)
+       var_values(6) = r(2)
+  end subroutine gas_heating_postProc
 
 end module m_user
