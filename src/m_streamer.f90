@@ -41,6 +41,8 @@ module m_streamer
   logical, public, protected :: compute_power_density = .false.
   !> Index of deposited power density
   integer, public, protected :: i_power_density = -1
+  !> Index of deposited energy density
+  integer, public, protected :: i_energy_density = -1
 
   !> Index of correction factor for source terms
   integer, public, protected :: i_srcfac = -1
@@ -292,7 +294,10 @@ contains
     call CFG_add_get(cfg, "compute_power_density", compute_power_density, &
          "Whether to compute the deposited power density")
 
-    call af_add_cc_variable(tree, "power_density", ix = i_power_density)
+    if (compute_power_density) then
+        call af_add_cc_variable(tree, "power_density", ix = i_power_density)
+        call af_add_cc_variable(tree, "energy_density", ix = i_energy_density)
+    end if
 
     call CFG_add_get(cfg, "use_end_streamer_length", ST_use_end_streamer_length, &
          "Whether the length of the streamer is used to end the simulation")

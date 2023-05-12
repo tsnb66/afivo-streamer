@@ -49,9 +49,13 @@ contains
 #endif
 
       box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
-        (slow_heating_efficiency*J_dot_E - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
+        (slow_heating_efficiency*J_dot_E*UC_elec_charge - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
            fast_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
+    if (compute_power_density) then
+            box%cc(IJK, i_energy_density) = box%cc(IJK, i_energy_density) + &
+                    J_dot_E * UC_elec_charge * dt_vec(1)
+    end if
     end do; CLOSE_DO
   end subroutine add_heating_box
 

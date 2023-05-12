@@ -317,7 +317,9 @@ contains
     integer                   :: i
     character(len=string_len) :: fname
 
-    call af_loop_box(tree, set_power_density_box)
+    if (compute_power_density) then
+        call af_loop_box(tree, set_power_density_box)
+    end if
 
     if (gas_dynamics) then
        call af_loop_box(tree, set_gas_primitives_box)
