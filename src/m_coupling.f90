@@ -28,7 +28,7 @@ contains
     type(box_t), intent(inout) :: box
     real(dp), intent(in)       :: dt_vec(:)
     integer                    :: IJK, nc
-    real(dp)                   :: J_dot_E
+    real(dp)                   :: J_dot_E, E_v_release_rate
 
     nc = box%n_cell
     do KJI_DO(1, nc)
@@ -48,10 +48,12 @@ contains
             box%fc(i, j, k+1, 3, flux_elec) * box%fc(i, j, k+1, 3, electric_fld))
 #endif
 
+      E_v_release_rate = box%cc(IJK, i_vibration_energy)/t_vt
       box%cc(IJK, i_vibration_energy) = box%cc(IJK, i_vibration_energy)+ &
-        (slow_heating_efficiency*J_dot_E*UC_elec_charge - box%cc(IJK, i_vibration_energy)/t_vt) * dt_vec(1)
+        (slow_heating_efficiency*J_dot_E*UC_elec_charge - E_v_release_rate) * dt_vec(1)
        box%cc(IJK, gas_vars(i_e)) = box%cc(IJK, gas_vars(i_e)) + &
-           fast_heating_efficiency *  J_dot_E * UC_elec_charge * dt_vec(1)
+           (fast_heating_efficiency *  J_dot_E * UC_elec_charge + &
+           E_v_release_rate) * dt_vec(1)
     if (compute_power_density) then
             box%cc(IJK, i_energy_density) = box%cc(IJK, i_energy_density) + &
                     J_dot_E * UC_elec_charge * dt_vec(1)
