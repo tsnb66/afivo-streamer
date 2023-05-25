@@ -210,9 +210,10 @@ program streamer
      ! Make sure to capture the start of the next pulse
      start_of_new_pulse = (dt >= time_until_next_pulse)
      if (start_of_new_pulse) then
-     print *, "Bug test: ", time_until_next_pulse, dt
+     ! print *, "Bug test: ", time_until_next_pulse, dt
+     !    dt = max(time_until_next_pulse, dt_min)
+     ! print *, "Bug test: after ", time_until_next_pulse, dt
         dt = max(time_until_next_pulse, dt_min)
-     print *, "Bug test: after ", time_until_next_pulse, dt
      end if
 
      if (photoi_enabled .and. mod(it, photoi_per_steps) == 0) then
