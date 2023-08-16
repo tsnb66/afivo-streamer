@@ -7,8 +7,8 @@ module m_user
   implicit none
   private
 
-  real(dp) :: desired_current = -50e-3_dp
-  real(dp) :: relaxation_time = 2e-9_dp
+  real(dp) :: desired_current = 0.1_dp
+  real(dp) :: relaxation_time = 5e-9_dp
 
   ! Public methods
   public :: user_initialize
@@ -20,6 +20,7 @@ contains
     type(af_t), intent(inout) :: tree
 
     user_field_amplitude => my_field_amplitude
+    user_log_variables => add_log_variables
 
   end subroutine user_initialize
 
@@ -35,10 +36,12 @@ contains
 
     dt = time - prev_time
 
-    if (time < 1e-9_dp) then
-       my_field_amplitude = 2e6_dp
-    else
-       ! Estimate resistance
+    if (time < 14e-9_dp) then
+       my_field_amplitude = -24e3 / (ST_domain_len(NDIM))
+       !my_field_amplitude = current_voltage / (ST_domain_len(NDIM))
+       !print *, "Ampli", current_voltage
+    else ! Estimate resistance
+
        resistance = current_voltage/ST_global_current
 
        goal_voltage = desired_current * resistance
@@ -55,5 +58,24 @@ contains
 
   end function my_field_amplitude
 
+  subroutine add_log_variables(tree, n_vars, var_names, var_values)
+       use m_streamer
+       type(af_t), intent(in)                 :: tree
+       integer, intent(out)                   :: n_vars
+       character(len=name_len), intent(inout) :: var_names(user_max_log_vars)
+       real(dp), intent(inout)                :: var_values(user_max_log_vars)
+
+
+       n_vars = 2
+       var_names(1) = 'current'
+       var_values(1) = ST_global_current
+       var_names(2) = 'power_deposited'
+       call af_tree_sum_cc(tree, i_power_density, var_values(2))
+       !var_names(3) = 'Je_x'
+       !call af_tree_sum_cc(tree, af_find_cc_variable(tree,"Je_1"), var_values(3))
+       !var_names(4) = 'Je_y'
+       !call af_tree_sum_cc(tree, af_find_cc_variable(tree,"Je_2"), var_values(4))
+
+  end subroutine add_log_variables
 
 end module m_user
