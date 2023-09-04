@@ -350,8 +350,7 @@ contains
           ! Ion mobility
           if (size(transport_data_ions%mobilities) > 0) then
              ! This should be an over-estimate
-             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv * &
-                  ST_sheath_max_ion_mobility_factor
+             max_mu_ion = maxval(abs(transport_data_ions%mobilities)) * N_inv
           else
              max_mu_ion = 0.0_dp
           end if
@@ -509,24 +508,10 @@ contains
     integer, intent(in)     :: IJK !< Flux index
     integer, intent(in)     :: dim !< Flux dimension
     real(dp), intent(in)    :: mu  !< Original mobility
-    real(dp)                :: field_norm, field_face, factor, lsf_face
+    real(dp)                :: field_face
 
     field_face = box%fc(IJK, dim, electric_fld)
-    factor = 1.0_dp
-
-    if (ST_sheath_max_ion_mobility_factor > 1 .and. ST_use_electrode) then
-       ! Get lsf value at the cell face, which should be (approximately) the
-       ! distance to the electrode
-       lsf_face = cc_average_at_cell_face(box, IJK, dim, i_lsf)
-
-       if (lsf_face < ST_sheath_max_lsf) then
-          field_norm = cc_average_at_cell_face(box, IJK, dim, i_electric_fld)
-          factor = max(1.0_dp, exp(field_norm/ST_sheath_field_threshold - 1))
-          factor = min(factor, ST_sheath_max_ion_mobility_factor)
-       end if
-    end if
-
-    v = mu * factor * field_face * get_N_inv_face(box, IJK, dim)
+    v = mu * field_face * get_N_inv_face(box, IJK, dim)
   end function get_ion_velocity
 
   !> Get average of cell-centered quantity at a cell face
@@ -687,19 +672,12 @@ contains
 
     call get_rates(fields, rates, n_cells)
 
-    if (ST_source_factor /= source_factor_none .or. &
-         ST_source_min_density > 0) then
+    if (ST_source_factor /= source_factor_none) then
        if (ST_source_factor /= source_factor_none) then
           call compute_source_factor(box, nc, dens(:, ix_electron), &
                fields, s_dt, source_factor)
        else
           source_factor(:) = 1.0_dp
-       end if
-
-       if (ST_source_min_density > 0) then
-          where (dens(:, ix_electron) < ST_source_min_density)
-             source_factor = 0.0_dp
-          end where
        end if
 
        if (i_srcfac > 0) then
@@ -731,9 +709,17 @@ contains
     if (last_step) then
        tid = omp_get_thread_num() + 1
 
-       ! Update chemistry time step
-       dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), &
-            minval((abs(dens) + dt_chemistry_nmin) / max(abs(derivs), eps)))
+       ! Update chemistry time step. Note that 'dens' is already non-negative.
+       if (dt_chemistry_nmin > 0) then
+          ! The time step is restricted by both the production and destruction
+          ! rate of species
+          tmp = minval((dens + dt_chemistry_nmin) / max(abs(derivs), eps))
+       else
+          ! Prevent negative values due to too much removal of a species
+          tmp = minval(max(dens, eps) / max(-derivs, eps))
+       end if
+
+       dt_matrix(dt_ix_rates, tid) = min(dt_matrix(dt_ix_rates, tid), tmp)
 
        ! Keep track of chemical production at last time integration step
        call chemical_rates_box(box, nc, rates, box_rates)
@@ -842,12 +828,10 @@ contains
     real(dp), intent(in)       :: fields(nc**NDIM)
     integer, intent(in)        :: s_dt
     real(dp), intent(out)      :: source_factor(nc**NDIM)
-    real(dp)                   :: mobilities(nc**NDIM), diffc(nc**NDIM)
+    real(dp)                   :: mobilities(nc**NDIM)
     real(dp)                   :: N_inv(nc**NDIM)
-    real(dp)                   :: inv_dr(NDIM), f(2*NDIM)
-    real(dp)                   :: Evec(NDIM), gradn(NDIM)
+    real(dp)                   :: inv_dr(NDIM)
     real(dp), parameter        :: small_flux      = 1.0e-9_dp ! A small flux
-    real(dp), parameter        :: harmonic_factor = 2.0_dp
     integer                    :: ix, IJK
 
     inv_dr = 1/box%dr
@@ -886,89 +870,14 @@ contains
        source_factor = (source_factor + small_flux) / (small_flux + &
             elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-    case (source_factor_flux_hmean)
-       ix = 0
-       do KJI_DO(1,nc)
-          ix = ix + 1
-
-          ! Compute norm of flux at cell center, but taking harmonic mean of
-          ! flux components
-#if NDIM == 1
-          f = abs([box%fc(i, 1, flux_elec), box%fc(i+1, 1, flux_elec)])
-          source_factor(ix) = 2*f(1)*f(2)/(f(1)+f(2)+small_flux)
-#elif NDIM == 2
-          f = abs([box%fc(i, j, 1, flux_elec), box%fc(i+1, j, 1, flux_elec), &
-               box%fc(i, j, 2, flux_elec), box%fc(i, j+1, 2, flux_elec)])
-          source_factor(ix) = norm2([2*f(1)*f(2)/(f(1)+f(2)+small_flux), &
-               2*f(3)*f(4)/(f(3)+f(4)+small_flux)])
-#elif NDIM == 3
-          f = abs([&
-               box%fc(i, j, k, 1, flux_elec), box%fc(i+1, j, k, 1, flux_elec), &
-               box%fc(i, j, k, 2, flux_elec), box%fc(i, j+1, k, 2, flux_elec), &
-               box%fc(i, j, k, 3, flux_elec), box%fc(i, j, k+1, 3, flux_elec)])
-          source_factor(ix) = norm2([&
-               2*f(1)*f(2)/(f(1)+f(2)+small_flux), &
-               2*f(3)*f(4)/(f(3)+f(4)+small_flux), &
-               2*f(5)*f(6)/(f(5)+f(6)+small_flux)])
-#endif
-       end do; CLOSE_DO
-
-       ! Compute source factor as harmonic_factor * |flux|/(n_e * mu * E). The
-       ! harmonic_factor is used to ensure 'regular' solutions are not affected;
-       ! only when source_factor < 1/harmonic_factor does it start to affect the
-       ! solution.
-       source_factor = harmonic_factor * (source_factor + small_flux) / &
-            (small_flux + elec_dens * mobilities * &
-            pack(box%cc(DTIMES(1:nc), i_electric_fld), .true.))
-    case (source_factor_original_cc)
-       ! This is the 'original' scheme, 1 - (E_hat . F_diff)/F_flux
-       diffc = LT_get_col(td_tbl, td_diffusion, fields) * N_inv
-       ix = 0
-       do KJI_DO(1,nc)
-          ix = ix + 1
-#if NDIM == 1
-          Evec = 0.5_dp * [box%fc(i, 1, electric_fld) + &
-               box%fc(i+1, 1, electric_fld)]
-          gradn = 0.5_dp * inv_dr * [&
-               box%cc(i+1, i_electron+s_dt) &
-               - box%cc(i-1, i_electron+s_dt)]
-#elif NDIM == 2
-          Evec = 0.5_dp * [box%fc(i, j, 1, electric_fld) + &
-               box%fc(i+1, j, 1, electric_fld), &
-               box%fc(i, j, 2, electric_fld) + &
-               box%fc(i, j+1, 2, electric_fld)]
-          gradn = 0.5_dp * inv_dr * [&
-               box%cc(i+1, j, i_electron+s_dt) &
-               - box%cc(i-1, j, i_electron+s_dt), &
-               box%cc(i, j+1, i_electron+s_dt) &
-               - box%cc(i, j-1, i_electron+s_dt)]
-#elif NDIM == 3
-          Evec = 0.5_dp * [box%fc(i, j, k, 1, electric_fld) + &
-               box%fc(i+1, j, k, 1, electric_fld), &
-               box%fc(i, j, k, 2, electric_fld) + &
-               box%fc(i, j+1, k, 2, electric_fld), &
-               box%fc(i, j, k, 3, electric_fld) + &
-               box%fc(i, j, k+1, 3, electric_fld)]
-          gradn = 0.5_dp * inv_dr * [&
-               box%cc(i+1, j, k, i_electron+s_dt) &
-               - box%cc(i-1, j, k, i_electron+s_dt), &
-               box%cc(i, j+1, k, i_electron+s_dt) &
-               - box%cc(i, j-1, k, i_electron+s_dt), &
-               box%cc(i, j, k+1, i_electron+s_dt) &
-               - box%cc(i, j, k-1, i_electron+s_dt)]
-#endif
-          source_factor(ix) = 1 + diffc(ix) * sum(Evec * gradn) / &
-               (small_flux + elec_dens(ix) * mobilities(ix) * &
-               box%cc(IJK, i_electric_fld)**2)
-       end do; CLOSE_DO
     case (source_factor_original_flux)
-       ! Compute source factor as 1 - (E . F_diff)/F_drift
+       ! Compute source factor as 1 - (E_hat . F_diff)/F_drift
        source_factor = 1 - pack(box%cc(DTIMES(1:nc), i_srcfac), .true.) / &
             (small_flux + elec_dens * mobilities * &
             pack(box%cc(DTIMES(1:nc), i_electric_fld)**2, .true.))
     case default
        error stop
-    end select
+    end select 
 
     source_factor = min(1.0_dp, source_factor)
     source_factor = max(0.0_dp, source_factor)

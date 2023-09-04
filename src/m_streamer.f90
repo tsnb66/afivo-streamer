@@ -93,21 +93,7 @@ module m_streamer
 
   integer, public, parameter :: source_factor_none = 0
   integer, public, parameter :: source_factor_flux = 1
-  integer, public, parameter :: source_factor_flux_hmean = 2
-  integer, public, parameter :: source_factor_original_cc = 3
-  integer, public, parameter :: source_factor_original_flux = 4
-
-  !> Minimal density for including electron sources
-  real(dp), public, protected :: ST_source_min_density = -1e10_dp
-
-  !> Maximal factor for ion mobility to reduce field in cathode sheath
-  real(dp), public, protected :: ST_sheath_max_ion_mobility_factor = 1.0_dp
-
-  !> Threshold field in cathode sheath (V/m)
-  real(dp), public, protected :: ST_sheath_field_threshold = 1e100_dp
-
-  !> Threshold lsf value for cathode sheath (typically m)
-  real(dp), public, protected :: ST_sheath_max_lsf = 0.5e-3_dp
+  integer, public, parameter :: source_factor_original_flux = 2
 
   !> End time of the simulation
   real(dp), public, protected :: ST_end_time = 10e-9_dp
@@ -376,28 +362,12 @@ contains
          "Use source factor to prevent unphysical effects due to diffusion")
     call CFG_add_get(cfg, "fixes%write_source_factor", write_source_factor, &
          "Whether to write the source factor to the output")
-    call CFG_add_get(cfg, "fixes%source_min_density", ST_source_min_density, &
-         "Minimal density for including electron sources")
-
-    call CFG_add_get(cfg, "fixes%sheath_max_ion_mobility_factor", &
-         ST_sheath_max_ion_mobility_factor, &
-         "Maximal factor for ion mobility to reduce field in cathode sheath")
-    call CFG_add_get(cfg, "fixes%sheath_field_threshold", &
-         ST_sheath_field_threshold, &
-         "Threshold field in cathode sheath (V/m)")
-    call CFG_add_get(cfg, "fixes%sheath_max_lsf", &
-         ST_sheath_max_lsf, &
-         "Threshold lsf value for cathode sheath (typically m)")
 
     select case (source_factor)
     case ("none")
        ST_source_factor = source_factor_none
     case ("flux")
        ST_source_factor = source_factor_flux
-    case ("flux_hmean")
-       ST_source_factor = source_factor_flux_hmean
-    case ("original_cc")
-       ST_source_factor = source_factor_original_cc
     case ("original_flux")
        ST_source_factor = source_factor_original_flux
        if (.not. write_source_factor) then
@@ -406,8 +376,7 @@ contains
           error stop
        end if
     case default
-       print *, "Options fixes%source_factor: none, flux, flux_hmean, ", &
-            "original_cc, original_flux"
+       print *, "Options fixes%source_factor: none, flux, original_flux"
        error stop "Unknown fixes%source_factor"
     end select
 
