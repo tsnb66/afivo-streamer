@@ -119,11 +119,12 @@ contains
   subroutine gas_heating_postProc(tree, n_vars, var_names, var_values)
        use m_streamer
        use m_gas
+       use m_units_constants
        type(af_t), intent(in)                 :: tree
        integer, intent(out)                   :: n_vars
        character(len=name_len), intent(inout) :: var_names(user_max_log_vars)
        real(dp), intent(inout)                :: var_values(user_max_log_vars)
-       real(dp)                               :: r(2)
+       real(dp)                               :: r(2), avg_temp, vol_area
        type(af_loc_t)                         :: loc_maxtemp
        type(af_loc_t)                         :: loc_maxpowerdens
 
@@ -136,8 +137,11 @@ contains
        var_names(5) = 'x'
        var_names(6) = 'y'
        var_names(7) = 'max_power_density'
+       vol_area = (UC_pi*ST_domain_len(1)**2*ST_domain_len(NDIM))
+       print *, "Volume: ", vol_area
 
-       call af_tree_sum_cc(tree, gas_prim_vars(i_e+1), var_values(1))
+       call af_tree_sum_cc(tree, gas_prim_vars(i_e+1), avg_temp)
+       var_values(1) = avg_temp/vol_area
        call af_tree_max_cc(tree, gas_prim_vars(i_e+1), var_values(4), loc_maxtemp)
        r= af_r_loc(tree, loc_maxtemp)
        var_values(2) = r(1)
